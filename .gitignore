@@ -1,0 +1,9 @@
+# Node dependencies
+node_modules/
+
+# Emscripten outputs
+public/*.js
+public/*.wasm
+
+# Vite build folder
+dist/
