@@ -1,7 +1,7 @@
 import * as THREE from "../node_modules/three/build/three.module.js"
+import { Body, PhysicsEngine } from "./physics_engine.js";
 
-
-function main(){
+function main(){0
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
   

@@ -1,13 +1,13 @@
-class Body{
-    constructor(x, y, x, vx, vy, vz, mass, radious){
-        this.x = x; this.y = y; this.z = this.z;
+export class Body{
+    constructor(x, y, z, vx, vy, vz, mass, radius){
+        this.x = x; this.y = y; this.z = z;
         this.vx = vx; this.vy = vy; this.vz = vz; 
         this.mass = mass; 
-        this.radious = radious; 
+        this.radius = radius; 
     } 
 }
 
-class PhysicsEngine{
+export class PhysicsEngine{
     constructor(maxBodies){
         this.maxBodies = maxBodies; 
         this.bodyCount = 0; 
@@ -19,7 +19,7 @@ class PhysicsEngine{
         this.data = new Float64Array(this.maxBodies * this.STRIDE);
     }
 
-    addBoddy(){
+    addBody(x,y,z,vx,vy,vz,mass,radius){
         const index = this.bodyCount * this.STRIDE; 
 
         this.data[index + 0] = x;
@@ -35,7 +35,7 @@ class PhysicsEngine{
         this.data[index + 8] = 0; //ay
 
         this.data[index + 9] = mass;
-        this.data[index + 10] = radious;
+        this.data[index + 10] = radius;
 
         this.bodyCount++;
     }
@@ -101,7 +101,7 @@ class PhysicsEngine{
             let massI = this.data[idxI + 9];
 
             for(let j = i+1; j < this.bodyCount; j++){
-                let idxJ = i * this.STRIDE;
+                let idxJ = j * this.STRIDE;
 
                 let xj = this.data[idxJ + 0];
                 let yj = this.data[idxJ + 1];
@@ -115,7 +115,7 @@ class PhysicsEngine{
                 let distSq = dx*dx + dy*dy + dz*dz; 
                 let dist = Math.sqrt(distSq);
 
-                let G_over_r3 = this.G*(distSq * dist); 
+                let G_over_r3 = this.G / (distSq * dist); 
 
                 let ax_i = G_over_r3 * massJ * dx;
                 let ay_i = G_over_r3 * massJ * dy;
