@@ -5,5 +5,5 @@ struct Body{
 	double vx, vy, vz;  // velocity 
 	double ax, ay, az; 
 	double mass; 
-	double radious;
+	double radius;
 };
