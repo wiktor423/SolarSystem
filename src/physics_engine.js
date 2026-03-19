@@ -12,7 +12,7 @@ export class PhysicsEngine{
         this.maxBodies = maxBodies; 
         this.bodyCount = 0; 
         this.bodies = []; 
-        this.G = 6.67430e-11;
+        this.G = 1;
         
         this.STRIDE = 11; 
 
@@ -108,9 +108,9 @@ export class PhysicsEngine{
                 let zj = this.data[idxJ + 2];
                 let massJ = this.data[idxJ + 9];
 
-                let dx = xi - xj;
-                let dy = yi - yj;
-                let dz = zi - zj;
+                let dx = xj - xi;
+                let dy = yj - yi;
+                let dz = zj - zi;
 
                 let distSq = dx*dx + dy*dy + dz*dz; 
                 let dist = Math.sqrt(distSq);
