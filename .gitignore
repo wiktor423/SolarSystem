@@ -7,3 +7,5 @@ public/*.wasm
 
 # Vite build folder
 dist/
+
+*.txt
