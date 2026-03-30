@@ -6,7 +6,7 @@ import PhysicsModule from '../cpp/physics_wasm.js';
 async function main(){
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
-  const ASTEROID_COUNT = 1000; 
+  const ASTEROID_COUNT = 2000; 
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
   camera.position.z = 25; 
