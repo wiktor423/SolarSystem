@@ -3,10 +3,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import PhysicsModule from '../cpp/physics_wasm.js';
 
+const benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
+const ASTEROID_COUNT = 1400; 
+
 async function main(){
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
-  const ASTEROID_COUNT = 2000; 
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
   camera.position.z = 25; 
@@ -152,10 +154,14 @@ async function main(){
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.2); 
   scene.add(ambientLight);
 
+
+
+//==========================================
   wasm._preCalculateAccelerations();
   
   const dt = 0.008;
   let frameCounter = 0;
+  const max_frames = 1000;
 
   function render(time){
     if(resizeRenderer(renderer)){ 
@@ -168,6 +174,7 @@ async function main(){
     const t0 = performance.now();
     wasm._stepPhysics(dt);
     const t1 = performance.now();
+    const physicsTime = t1 - t0;
 
     planets[0].rotation.y = time*0.001;
 
@@ -200,8 +207,13 @@ async function main(){
     renderer.render(scene, camera);
     const t3 = performance.now();
 
-    if (frameCounter % 60 === 0) {
-        console.log(`Physics: ${(t1 - t0).toFixed(2)}ms | Render: ${(t3 - t2).toFixed(2)}ms`);
+    const renderTime = t3-t2;
+
+    if(frameCounter < max_frames){
+      benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
+    }
+    else if(frameCounter === max_frames){
+      exportToCSV();
     }
     frameCounter++;
 
@@ -219,7 +231,27 @@ function resizeRenderer(renderer){
   if(needResize){
     renderer.setSize(width, height, false);
   }
-  return needResize;
+  return needResize; 
 }
+
+function exportToCSV(){
+  //convertion to the csv string 
+  const csvContent = benchmarkData.map(row => row.join(",")).join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  //automatic download
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `WASM_Benchmark_${ASTEROID_COUNT}_bodies.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  console.log("benchmark complete");
+}
+
 
 main();
