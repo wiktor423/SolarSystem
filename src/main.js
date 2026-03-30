@@ -6,7 +6,7 @@ import { Body, PhysicsEngine } from "./physics_engine.js";
 function main(){
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
-  const ASTEROID_COUNT = 1000; 
+  const ASTEROID_COUNT = 2000; 
 
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
@@ -178,6 +178,8 @@ function main(){
  * Render function
  */
 
+  let frameCounter = 0; 
+
   function render(time){
     if(resizeRenderer(renderer)){ 
       const canvas = renderer.domElement; 
@@ -185,7 +187,9 @@ function main(){
       camera.updateProjectionMatrix();    
     }
 
-    physics.step(dt)
+    const t0 = performance.now();
+    physics.step(dt);
+    const t1 = performance.now();
 
     planets[0].rotation.y = time*0.001;
     planets.forEach((planet) => {
@@ -195,8 +199,6 @@ function main(){
     planet.position.x = physics.data[pIndex + 0];
     planet.position.y = physics.data[pIndex + 1];
     planet.position.z = physics.data[pIndex + 2];
-    
-    //performance.now();
   });
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
@@ -221,7 +223,17 @@ function main(){
     asteroidMesh.instanceMatrix.needsUpdate = true;
 
     controls.update();
+
+    const t2 = performance.now();
     renderer.render(scene, camera);
+    const t3 = performance.now();
+
+    if (frameCounter % 60 === 0) {
+        console.log(`Physics: ${(t1 - t0).toFixed(2)}ms | Render: ${(t3 - t2).toFixed(2)}ms`);
+    }
+
+    frameCounter++;
+
     requestAnimationFrame(render);
   } 
 
