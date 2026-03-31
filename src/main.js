@@ -245,27 +245,21 @@ function resizeRenderer(renderer){
   if(needResize){
     renderer.setSize(width, height, false);
   }
-  return needResize; 
+  return needResize;
 }
 
 function exportToCSV(){
-  //convertion to the csv string 
   const csvContent = benchmarkData.map(row => row.join(",")).join("\n");
-
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-
-  //automatic download
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `WASM_Benchmark_${ASTEROID_COUNT}_bodies.csv`);
+  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-
   console.log("benchmark complete");
 }
-
 
 main();
