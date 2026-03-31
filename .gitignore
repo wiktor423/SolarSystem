@@ -5,6 +5,9 @@ node_modules/
 public/*.js
 public/*.wasm
 
+cpp/*.js
+cpp/*.wasm
+
 # Vite build folder
 dist/
 
