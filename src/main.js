@@ -233,7 +233,6 @@ async function main(){
 
     requestAnimationFrame(render);
   } 
-
   requestAnimationFrame(render);
 }
 
