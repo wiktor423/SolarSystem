@@ -1,9 +1,8 @@
 export class Body{
-    constructor(x, y, z, vx, vy, vz, mass, radius){
+    constructor(x, y, z, vx, vy, vz, mass){
         this.x = x; this.y = y; this.z = z;
         this.vx = vx; this.vy = vy; this.vz = vz; 
-        this.mass = mass; 
-        this.radius = radius; 
+        this.mass = mass;
     } 
 }
 
@@ -14,12 +13,12 @@ export class PhysicsEngine{
         this.bodies = []; 
         this.G = 1;
         
-        this.STRIDE = 11; 
-
-        this.data = new Float64Array(this.maxBodies * this.STRIDE);
+        this.posMass = Float64Array(this.bodyCount * 4); 
+        this.vel     = Float64Array(this.bodyCount * 3);
+        this.accel   = Float64Array(this.bodyCount * 3);
     }
 
-    addBody(x,y,z,vx,vy,vz,mass,radius){
+    addBody(x,y,z,vx,vy,vz,mass){
         const index = this.bodyCount * this.STRIDE; 
 
         this.data[index + 0] = x;
@@ -33,9 +32,6 @@ export class PhysicsEngine{
         this.data[index + 6] = 0; //ax
         this.data[index + 7] = 0; //ay
         this.data[index + 8] = 0; //ay
-
-        this.data[index + 9] = mass;
-        this.data[index + 10] = radius;
 
         this.bodyCount++;
     }

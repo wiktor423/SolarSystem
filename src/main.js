@@ -44,6 +44,7 @@ async function main(){
   const velData = new Float64Array(wasm.HEAPF64.buffer, wasm._getVelPointer(), MAX_BODIES * 3);
 
   let currentBodyIndex = 0; 
+  
   // ===============================================
 
   const scene = new THREE.Scene();
