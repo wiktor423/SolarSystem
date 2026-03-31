@@ -3,11 +3,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Body, PhysicsEngine } from "./physics_engine.js";
 //import { shininess } from 'three/tsl';
 
+const benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
+const ASTEROID_COUNT = 1400;    
+
 function main(){
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
-  const ASTEROID_COUNT = 2000; 
-
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
   const physics = new PhysicsEngine(ASTEROID_COUNT + 20);
@@ -178,7 +179,9 @@ function main(){
  * Render function
  */
 
-  let frameCounter = 0; 
+  let frameCounter = 0;
+  const max_frames = 1000;
+
 
   function render(time){
     if(resizeRenderer(renderer)){ 
@@ -190,6 +193,7 @@ function main(){
     const t0 = performance.now();
     physics.step(dt);
     const t1 = performance.now();
+    const physicsTime = t1-t0;
 
     planets[0].rotation.y = time*0.001;
     planets.forEach((planet) => {
@@ -227,16 +231,18 @@ function main(){
     const t2 = performance.now();
     renderer.render(scene, camera);
     const t3 = performance.now();
+    const renderTime = t3-t2;
 
-    if (frameCounter % 60 === 0) {
-        console.log(`Physics: ${(t1 - t0).toFixed(2)}ms | Render: ${(t3 - t2).toFixed(2)}ms`);
+    if(frameCounter < max_frames){
+      benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
+    }
+    else if(frameCounter === max_frames){
+      exportToCSV();
     }
 
     frameCounter++;
-
     requestAnimationFrame(render);
   } 
-
   requestAnimationFrame(render);
 }
 
@@ -253,5 +259,25 @@ function resizeRenderer(renderer){
 
   return needResize;
 }
+
+function exportToCSV(){
+  //convertion to the csv string 
+  const csvContent = benchmarkData.map(row => row.join(",")).join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  //automatic download
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `JS_Benchmark_${ASTEROID_COUNT}_bodies.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  console.log("benchmark complete");
+}
+
 
 main();
