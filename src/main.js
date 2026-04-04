@@ -37,14 +37,14 @@ async function main(){
   const planetData = [
     {name: 'Sun', texturePath: 'textures/sun.jpg', radius: 3, distance: 0, mass: 10000, vz: 0},
     {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2, distance: 10, mass: 0.05, vz: 31.62},
-    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9, distance: 16, mass: 0.8,  vz: 25.00},
-    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1,   distance: 22, mass: 1,    vz: 21.32},
-    {name: 'Moon',    texturePath: 'textures/moon.jpg', radius: 0.25, distance: 22.4, mass: 0.012, vz: 22.90}, 
-    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53,distance: 30, mass: 0.1,  vz: 18.26},
-    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5, distance: 44, mass: 10,   vz: 15.08}, 
-    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1, distance: 60, mass: 3,    vz: 12.91},
-    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5, distance: 76, mass: 0.5,  vz: 11.47}, 
-    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5, distance: 90, mass: 0.6,  vz: 10.54},
+    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9, distance: 18.46, mass: 0.8,  vz: 23.27},
+    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1,   distance: 25.64, mass: 1,    vz: 19.74},
+    //{name: 'Moon',    texturePath: 'textures/moon.jpg', radius: 0.25, distance: 39.97, mass: 0.012, vz: 22.90}, 
+    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53,distance: 39.97, mass: 0.1,  vz: 15.81},
+    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5, distance: 133.33, mass: 10,   vz: 8.66}, 
+    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1, distance: 244.6, mass: 3,    vz: 6.39},
+    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5, distance: 492.82, mass: 0.5,  vz: 4.5}, 
+    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5, distance: 770.76, mass: 0.6,  vz: 3.60},
   ];
 
   // ===============================================
@@ -196,7 +196,7 @@ async function main(){
   // ===============================================
   // RENDER 
   // ===============================================
-  const dt = 0.008;
+  const dt = 0.016;
   const start_counting = 2000;
 
   function render(time){
