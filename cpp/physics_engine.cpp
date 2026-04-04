@@ -33,8 +33,8 @@ extern "C" {
         std::fill(accel.begin(), accel.end(), 0.0);
 
         for (int i = 0; i < bodyCount; i++) {
-            int iPM = i * 4; 
-            int i3  = i * 3; 
+            int iPM = i * 4;
+            int i3  = i * 3;
             double iMass = posMass[iPM + 3];
 
             for(int j = i + 1; j < bodyCount; j++) {

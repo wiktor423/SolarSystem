@@ -10,7 +10,7 @@ let ASTEROID_COUNT = 1400;
 let activePosMass = null;
 let activeVel = null;
 let frameCounter = 0;
-const max_frames = 1000;
+const max_frames = 3000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
 //=======================
@@ -38,7 +38,8 @@ async function main(){
     {name: 'Sun', texturePath: 'textures/sun.jpg', radius: 3, distance: 0, mass: 10000, vz: 0},
     {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2, distance: 10, mass: 0.05, vz: 31.62},
     {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9, distance: 16, mass: 0.8,  vz: 25.00},
-    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1,   distance: 22, mass: 1,    vz: 21.32}, 
+    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1,   distance: 22, mass: 1,    vz: 21.32},
+    {name: 'Moon',    texturePath: 'textures/moon.jpg', radius: 0.25, distance: 22.4, mass: 0.012, vz: 22.90}, 
     {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53,distance: 30, mass: 0.1,  vz: 18.26},
     {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5, distance: 44, mass: 10,   vz: 15.08}, 
     {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1, distance: 60, mass: 3,    vz: 12.91},
@@ -100,6 +101,22 @@ async function main(){
       const planetMesh = new THREE.Mesh(baseGeometry, material);
       planetMesh.scale.set(data.radius, data.radius, data.radius);
       planetMesh.position.x = data.distance;
+
+     if(data.name == 'Saturn'){
+        const ringGeometry = new THREE.RingGeometry(1.2, 1.7, 64); 
+        
+        const ringMaterial = new THREE.MeshBasicMaterial({ 
+          map: textureLoader.load("textures/saturn_ring.png"),
+          side: THREE.DoubleSide, 
+          transparent: true,
+          opacity: 0.8
+        });  
+
+        const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+        
+        ringMesh.rotation.x = Math.PI / 1.5; 
+        planetMesh.add(ringMesh);
+      }
 
       const pmIdx = currentBodyIndex * 4;
       const vIdx = currentBodyIndex * 3;
@@ -180,6 +197,7 @@ async function main(){
   // RENDER 
   // ===============================================
   const dt = 0.008;
+  const start_counting = 2000;
 
   function render(time){
     if(resizeRenderer(renderer)){ 
@@ -224,11 +242,12 @@ async function main(){
     const t3 = performance.now();
     const renderTime = t3 - t2;
 
-    if(frameCounter < max_frames){
-      benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
-    } else if(frameCounter === max_frames){
-      exportToCSV(); 
-    }
+    // if((frameCounter > start_counting) && (frameCounter < max_frames)){
+    //   benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
+    // } else if(frameCounter === max_frames){
+    //   exportToCSV(); 
+    // }
+
     frameCounter++;
 
     requestAnimationFrame(render);
@@ -253,7 +272,7 @@ function exportToCSV(){
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies.csv`);
+  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies_no-ffast-math.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
