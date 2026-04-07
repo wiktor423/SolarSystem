@@ -10,7 +10,7 @@ let ASTEROID_COUNT = 1400;
 let activePosMass = null;
 let activeVel = null;
 let frameCounter = 0;
-const max_frames = 3000;
+const max_frames = 5000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
 //=======================
@@ -34,17 +34,33 @@ async function main(){
   scene.add(light);
   scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
+  // Add stars background
+  const starsGeometry = new THREE.BufferGeometry();
+  const starsMaterial = new THREE.PointsMaterial({color: 0xffffff, size: 0.1});
+  const starsVertices = []; 
+
+  for (let i = 0; i < 1000; i++) {
+    const x = THREE.MathUtils.randFloatSpread(1000);
+    const y = THREE.MathUtils.randFloatSpread(1000);
+    const z = THREE.MathUtils.randFloatSpread(1000);
+    starsVertices.push(x, y, z);
+  }
+
+  starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+  const starField = new THREE.Points(starsGeometry, starsMaterial);
+  scene.add(starField);
+
   const planetData = [
-    {name: 'Sun', texturePath: 'textures/sun.jpg', radius: 3, distance: 0, mass: 10000, vz: 0},
-    {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2, distance: 10, mass: 0.05, vz: 31.62},
-    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9, distance: 18.46, mass: 0.8,  vz: 23.27},
-    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1,   distance: 25.64, mass: 1,    vz: 19.74},
-    //{name: 'Moon',    texturePath: 'textures/moon.jpg', radius: 0.25, distance: 39.97, mass: 0.012, vz: 22.90}, 
-    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53,distance: 39.97, mass: 0.1,  vz: 15.81},
-    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5, distance: 133.33, mass: 10,   vz: 8.66}, 
-    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1, distance: 244.6, mass: 3,    vz: 6.39},
-    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5, distance: 492.82, mass: 0.5,  vz: 4.5}, 
-    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5, distance: 770.76, mass: 0.6,  vz: 3.60},
+    {name: 'Sun',     texturePath: 'textures/sun-texture.jpg',     radius: 3,    distance: 0,    mass: 10000, vz: 0},
+    {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2,  distance: 10,   mass: 0.0016,  vz: 31.62},
+    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9,  distance: 16,   mass: 0.024,   vz: 25.00},
+    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1, distance: 22,   mass: 0.03,  vz: 21.32}, 
+    //{name: 'Moon',    texturePath: 'textures/moon.jpg',    radius: 0.01, distance: 22.1,   mass: 0.0003,vz: 21.86}, 
+    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53, distance: 30,   mass: 0.1,   vz: 18.26},
+    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5,  distance: 55,   mass: 9.54,    vz: 13.48}, 
+    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1,  distance: 75,   mass: 2.85,     vz: 11.55},
+    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5,  distance: 95,   mass: 0.5,   vz: 10.26}, 
+    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5,  distance: 115,  mass: 0.51,   vz: 9.32},
   ];
 
   // ===============================================
@@ -139,20 +155,20 @@ async function main(){
 
     //Asteroids
     const rockGeometry = new THREE.DodecahedronGeometry(1, 0); 
-    const rockMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+    const rockMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0xffffff,shininess: 1});
     asteroidMesh = new THREE.InstancedMesh(rockGeometry, rockMaterial, ASTEROID_COUNT);
     asteroidMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); 
     scene.add(asteroidMesh);
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
-      const distance = 32 + Math.random() * 10; 
+      const distance = 32 + Math.random() * 20; 
       const angle = Math.random() * Math.PI * 2;
       const x = Math.cos(angle) * distance;
       const z = Math.sin(angle) * distance;
       const velocity = Math.sqrt(10000 / distance);
       const vx = -Math.sin(angle) * velocity;
       const vz = Math.cos(angle) * velocity;
-      const mass = 0.0001;
+      const mass = 0.00001;
       const radius = 0.05 + Math.random() * 0.05;
 
       const pmIdx = currentBodyIndex * 4;
@@ -196,8 +212,7 @@ async function main(){
   // ===============================================
   // RENDER 
   // ===============================================
-  const dt = 0.016;
-  const start_counting = 2000;
+  const dt = 0.004;
 
   function render(time){
     if(resizeRenderer(renderer)){ 
@@ -242,11 +257,11 @@ async function main(){
     const t3 = performance.now();
     const renderTime = t3 - t2;
 
-    // if((frameCounter > start_counting) && (frameCounter < max_frames)){
-    //   benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
-    // } else if(frameCounter === max_frames){
-    //   exportToCSV(); 
-    // }
+    if(frameCounter < max_frames){
+      benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
+    } else if(frameCounter === max_frames){
+      //exportToCSV(); 
+    }
 
     frameCounter++;
 
@@ -272,7 +287,7 @@ function exportToCSV(){
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies_no-ffast-math.csv`);
+  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies_5000ff.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
