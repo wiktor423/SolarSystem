@@ -40,9 +40,9 @@ async function main(){
   const starsVertices = []; 
 
   for (let i = 0; i < 1000; i++) {
-    const x = THREE.MathUtils.randFloatSpread(1000);
-    const y = THREE.MathUtils.randFloatSpread(1000);
-    const z = THREE.MathUtils.randFloatSpread(1000);
+    const x = THREE.MathUtils.randFloatSpread(3000);
+    const y = THREE.MathUtils.randFloatSpread(3000);
+    const z = THREE.MathUtils.randFloatSpread(3000);
     starsVertices.push(x, y, z);
   }
 
