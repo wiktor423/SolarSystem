@@ -10,7 +10,7 @@ let ASTEROID_COUNT = 1400;
 let activePosMass = null;
 let activeVel = null;
 let frameCounter = 0;
-const max_frames = 5000;
+const max_frames = 1000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
 //=======================
@@ -260,7 +260,7 @@ async function main(){
     if(frameCounter < max_frames){
       benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
     } else if(frameCounter === max_frames){
-      //exportToCSV(); 
+      exportToCSV(); 
     }
 
     frameCounter++;
@@ -287,7 +287,7 @@ function exportToCSV(){
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies_5000ff.csv`);
+  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_${ASTEROID_COUNT}_multi.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();

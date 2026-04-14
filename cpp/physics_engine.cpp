@@ -1,4 +1,6 @@
 #include <emscripten.h>
+#include <omp.h>
+
 #include <vector>
 #include <cmath>
 
@@ -62,6 +64,8 @@ extern "C" {
 
     EMSCRIPTEN_KEEPALIVE
     void stepPhysics(double dt) {
+
+        #pragma omp parallel for
         for (int i=0; i<bodyCount; i++){
             int iPM = i * 4;
             int i3 = i * 3; 
@@ -78,12 +82,17 @@ extern "C" {
         //Zero the accelerations
         std::fill(accel.begin(), accel.end(), 0.0); 
 
+        #pragma omp parallel for
         for (int i=0; i<bodyCount; i++){
             int iPM = i * 4; 
             int i3  = i * 3; 
             double iMass = posMass[iPM + 3];
 
-            for(int j=i+1; j<bodyCount; j++){
+            double ax = 0.0, ay = 0.0, az = 0.0;
+
+            for(int j=0; j<bodyCount; j++){
+                if (i == j) continue;
+
                 int jPM = j * 4;
                 int j3  = j * 3;
                 double jMass = posMass[jPM + 3];
@@ -92,19 +101,19 @@ extern "C" {
                 double dy = posMass[jPM + 1] - posMass[iPM + 1];
                 double dz = posMass[jPM + 2] - posMass[iPM + 2];
 
-                double distSq = dx*dx + dy*dy + dz*dz; 
+                double distSq = dx*dx + dy*dy + dz*dz + 0.0001; 
                 double dist = std::sqrt(distSq); 
 
                 double G_over_r3 = 1 / (distSq * dist); 
 
-                accel[i3 + 0] += G_over_r3 * jMass * dx;
-                accel[i3 + 1] += G_over_r3 * jMass * dy;
-                accel[i3 + 2] += G_over_r3 * jMass * dz;
-                
-                accel[j3 + 0] -= G_over_r3 * iMass * dx;
-                accel[j3 + 1] -= G_over_r3 * iMass * dy;
-                accel[j3 + 2] -= G_over_r3 * iMass * dz;
+                ax += G_over_r3 * jMass * dx;
+                ay += G_over_r3 * jMass * dy;
+                az += G_over_r3 * jMass * dz;
             }
+
+            accel[i3 + 0] = ax;
+            accel[i3 + 1] = ay;
+            accel[i3 + 2] = az;
         }
 
         for(int i=0; i<bodyCount; i++){
