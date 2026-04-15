@@ -1,48 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<script type="importmap">
+  <script type="importmap">
     {
       "imports": {
         "three": "../node_modules/three/build/three.module.js",
-        "three/addons/": "../node_modules/three/examples/jsm/"
+        "three/addons/": "../node_modules/three/examples/jsm/",
+        "three/src/": "../node_modules/three/src/" 
       }
     }
   </script>
 
-	<style>
-		html, body {
-			margin: 0; 
-			height: 100%;
-			overflow: hidden;
-		}
-		#c {
-			width: 100%;
-			height: 100%;
-			display: block;
-		}
-	</style>
+  <style>
+    html, body {
+      margin: 0; 
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+      background-color: #050505; 
+    }
+    #c {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #welcome-screen {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000; 
+      transition: opacity 0.5s ease; 
+    }
+
+    .welcome-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 40px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      max-width: 600px;
+    }
+
+    .start-btn {
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 1.1em;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.4s;
+    }
+    .start-btn:hover { background: #45a049; }
+
+    #sim-ui {
+      position: absolute; 
+      top: 10px; left: 10px; 
+      background: rgba(0,0,0,0.8); 
+      color: white; 
+      padding: 15px; 
+      border-radius: 8px; 
+      z-index: 100;
+      display: none; 
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
 
 <body>
-    <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 15px; font-family: sans-serif; border-radius: 8px; z-index: 100;">
-        <h3 style="margin-top: 0;">Computational Load</h3>
-        
+    <div id="welcome-screen">
+        <div class="welcome-card">
+            <h1 style="margin-top: 0;">N-Body Gravity Engine</h1>
+            <p style="line-height: 1.6; color: #ccc;">
+                A high-performance computational physics benchmark comparing the execution limits of JavaScript (V8) against WebAssembly (C++).
+            </p>
+            
+            <div style="margin: 30px 0; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px;">
+                <label><strong>Select Initial Engine:</strong></label><br><br>
+                <select id="initial-engine" style="width: 100%; padding: 8px;">
+                    <option value="WASM">C++ WebAssembly (Max Performance)</option>
+                    <option value="JS">JavaScript (Standard)</option>
+                </select>
+                <br><br>
+                <label><strong>Target Bodies:</strong></label><br><br>
+                <input type="number" id="initial-asteroids" value="1400" step="100" style="width: 100%; padding: 8px;">
+            </div>
+
+            <button id="enter-sim-btn" class="start-btn">Launch Simulation</button>
+        </div>
+    </div>
+
+    <div id="sim-ui" style="opacity: 0.9;">
+        <h3 style="margin-top: 0;">Live Telemetry</h3>
         <label>Engine:</label>
         <select id="engine-select">
             <option value="WASM">C++ WebAssembly</option>
             <option value="JS">JavaScript (V8)</option>
         </select>
         <br><br>
-
         <label>Asteroids:</label>
         <input type="number" id="asteroid-input" value="1400" step="100" style="width: 70px;">
         <br><br>
-
-        <button id="restart-btn" style="padding: 5px 10px; cursor: pointer;">Start / Reset</button>
+        <button id="restart-btn" style="padding: 5px 10px; cursor: pointer;">Restart Environment</button>        
+        
+        <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">
+            <div style="margin-bottom: 5px; font-family: monospace; font-size: 0.9em; opacity: 0.7;">
+                Physics Time: <span id="physics-time-display">0.00</span> ms
+            </div>
+            <div style="font-family: monospace; font-size: 0.9em; opacity: 0.7;">
+                Physics FPS: <span id="physics-fps-display">0</span>
+            </div>
+            <div style="margin-top: 10px; height: 80px; width: 200px; opacity: 0.5;">
+                <canvas id="performance-chart"></canvas>
+            </div>
+        </div>
     </div>
 
-    <script type="module" src="src/main.js"></script>
     <canvas id="c"></canvas>
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>

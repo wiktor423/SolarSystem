@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import PhysicsModule from '../cpp/physics_wasm.js';
 import { PhysicsEngineJS } from './physics_engine.js';
+//fimport { fill } from 'three/src/extras/TextureUtils.js';
 
 //====GLOBAL=STATE=====
 
@@ -10,9 +11,50 @@ let ASTEROID_COUNT = 1400;
 let activePosMass = null;
 let activeVel = null;
 
+const timeDisplay = document.getElementById('physics-time-display');
+const fpsDisplay = document.getElementById('physics-fps-display');
+let lastUiUpdateTime = 0;
+
 let frameCounter = 0;
 const max_frames = 2000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
+
+const chartCtx = document.getElementById('performance-chart').getContext('2d');
+  
+const maxDataPoints = 50; 
+const emptyData = Array(maxDataPoints).fill(0);
+const emptyLabels = Array(maxDataPoints).fill('');
+
+const perfChart = new Chart(chartCtx, {
+    type: 'line',
+    data: {
+        labels: emptyLabels,
+        datasets: [{
+            label: 'Physics Time (ms)',
+            data: [...emptyData],
+            borderColor: '#5eae60', //WASM
+            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+            borderWidth: 2,
+            pointRadius: 0,         // smooth line
+            tension: 0.2,            // slight curve 
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,           
+        scales: {
+            x: { display: false },  
+            y: { 
+                beginAtZero: true,
+                suggestedMax: 30,   
+                grid: { color: 'rgba(255,255,255,0.1)' },
+                ticks: { color: '#ccc', stepSize: 10 }
+            }
+        },
+        plugins: { legend: { display: false } } 
+    }
+});
 
 //=======================
 
@@ -85,6 +127,10 @@ async function main(){
   function resetSimulation() {
     useWasm = document.getElementById('engine-select').value === "WASM";
     ASTEROID_COUNT = parseInt(document.getElementById('asteroid-input').value);
+
+    perfChart.data.datasets[0].data = Array(maxDataPoints).fill(0);
+    perfChart.data.datasets[0].borderColor = useWasm ? '#4CAF50' : '#FF9800';
+    perfChart.update();
     
     const TOTAL_BODIES = planetData.length + ASTEROID_COUNT;
 
@@ -206,7 +252,7 @@ async function main(){
   document.getElementById('restart-btn').addEventListener('click', resetSimulation);
 
   //every time the page loads
-  resetSimulation();
+  //resetSimulation();
 
 
 
@@ -232,6 +278,22 @@ async function main(){
     
     const t1 = performance.now();
     const physicsTime = t1 - t0;
+
+    if (t1 - lastUiUpdateTime > 250) {
+          const physicsFPS = physicsTime > 0 ? (1000 / physicsTime) : 0; 
+
+          timeDisplay.textContent = physicsTime.toFixed(2);
+          
+          fpsDisplay.textContent = physicsFPS > 9999 ? "Max" : Math.round(physicsFPS);
+          
+          lastUiUpdateTime = t1;
+
+          perfChart.data.datasets[0].data.push(physicsTime);
+          
+          // Remove the oldest time from the beginning to make it scroll
+          perfChart.data.datasets[0].data.shift(); 
+          perfChart.update();
+      }
 
     planets.forEach((planet) => {
       const pIndex = planet.userData.physicsIndex * 4; 
@@ -261,14 +323,35 @@ async function main(){
     if(frameCounter < max_frames){
       benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
     } else if(frameCounter === max_frames){
-      exportToCSV(); 
+      //exportToCSV(); 
     }
 
     frameCounter++;
 
     requestAnimationFrame(render);
   } 
-  requestAnimationFrame(render);
+  //requestAnimationFrame(render);
+  document.getElementById('enter-sim-btn').addEventListener('click', () => {
+    // 1. Grab values from the Welcome Page
+    const initEngine = document.getElementById('initial-engine').value;
+    const initAsteroids = document.getElementById('initial-asteroids').value;
+    
+    // 2. Sync them to your hidden Live UI panel
+    document.getElementById('engine-select').value = initEngine;
+    document.getElementById('asteroid-input').value = initAsteroids;
+    
+    // 3. Fade out the Welcome Screen
+    const welcomeScreen = document.getElementById('welcome-screen');
+    welcomeScreen.style.opacity = '0';
+    setTimeout(() => {
+        welcomeScreen.style.display = 'none'; // Remove it from layout
+        document.getElementById('sim-ui').style.display = 'block'; // Show Live UI
+    }, 500); 
+
+    // 4. Start the engine! 
+    resetSimulation();
+    requestAnimationFrame(render);
+  });
 }
 
 function resizeRenderer(renderer){
