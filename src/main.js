@@ -9,8 +9,9 @@ let useWasm = true;
 let ASTEROID_COUNT = 1400; 
 let activePosMass = null;
 let activeVel = null;
+
 let frameCounter = 0;
-const max_frames = 5000;
+const max_frames = 2000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
 //=======================
@@ -40,9 +41,9 @@ async function main(){
   const starsVertices = []; 
 
   for (let i = 0; i < 1000; i++) {
-    const x = THREE.MathUtils.randFloatSpread(3000);
-    const y = THREE.MathUtils.randFloatSpread(3000);
-    const z = THREE.MathUtils.randFloatSpread(3000);
+    const x = THREE.MathUtils.randFloatSpread(1000);
+    const y = THREE.MathUtils.randFloatSpread(1000);
+    const z = THREE.MathUtils.randFloatSpread(1000);
     starsVertices.push(x, y, z);
   }
 
@@ -260,7 +261,7 @@ async function main(){
     if(frameCounter < max_frames){
       benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
     } else if(frameCounter === max_frames){
-      //exportToCSV(); 
+      exportToCSV(); 
     }
 
     frameCounter++;
@@ -287,9 +288,8 @@ function exportToCSV(){
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_Benchmark_${ASTEROID_COUNT}_bodies_5000ff.csv`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
+  link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_${ASTEROID_COUNT}.csv`);
+  link.style_visibility = 'hidden';document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   console.log("benchmark complete");
