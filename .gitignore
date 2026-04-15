@@ -12,3 +12,4 @@ cpp/*.wasm
 dist/
 
 *.txt
+benchmarks/
