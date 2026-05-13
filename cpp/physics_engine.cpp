@@ -92,7 +92,7 @@ extern "C" {
                 double dy = posMass[jPM + 1] - posMass[iPM + 1];
                 double dz = posMass[jPM + 2] - posMass[iPM + 2];
 
-                double distSq = dx*dx + dy*dy + dz*dz; 
+                double distSq = dx*dx + dy*dy + dz*dz + 0.0001;
                 double dist = std::sqrt(distSq); 
 
                 double G_over_r3 = 1 / (distSq * dist); 
