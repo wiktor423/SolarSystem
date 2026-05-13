@@ -11,5 +11,5 @@ cpp/*.wasm
 # Vite build folder
 dist/
 
-*.txt 
+*.txt
 benchmarks/
