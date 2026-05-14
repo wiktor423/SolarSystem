@@ -63,8 +63,8 @@ async function main(){
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-  camera.position.z = 25; 
-  camera.position.y = 10;
+  camera.position.z = 70; 
+  camera.position.y = 40;
   camera.lookAt(0, 0, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -72,10 +72,10 @@ async function main(){
   controls.dampingFactor = 0.05;
 
   const scene = new THREE.Scene();
-  const light = new THREE.PointLight(0xffffff, 100, 200);
+  const light = new THREE.PointLight(0xffffee, 200, 400);
   light.position.set(0, 0, 0);
   scene.add(light);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.1));
 
   // Add stars background
   const starsGeometry = new THREE.BufferGeometry();
@@ -94,16 +94,16 @@ async function main(){
   scene.add(starField);
 
   const planetData = [
-    {name: 'Sun',     texturePath: 'textures/sun-texture.jpg',     radius: 3,    distance: 0,    mass: 10000, vz: 0},
-    {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2,  distance: 10,   mass: 0.0016,  vz: 31.62},
-    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9,  distance: 16,   mass: 0.024,   vz: 25.00},
-    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1, distance: 22,   mass: 0.03,  vz: 21.32}, 
+    {name: 'Sun',     texturePath: 'textures/sun-texture.jpg',     radius: 3,    distance: 0,    mass: 10000, vz: 0, trailColor: 0xffcc33},
+    {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2,  distance: 10,   mass: 0.0016,  vz: 31.62, trailColor: 0xaaaaaa},
+    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9,  distance: 16,   mass: 0.024,   vz: 25.00, trailColor: 0xffaa00},
+    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1, distance: 22,   mass: 0.03,  vz: 21.32, trailColor: 0x4488ff}, 
     //{name: 'Moon',    texturePath: 'textures/moon.jpg',    radius: 0.01, distance: 22.1,   mass: 0.0003,vz: 21.86}, 
-    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53, distance: 30,   mass: 0.1,   vz: 18.26},
-    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5,  distance: 55,   mass: 9.54,    vz: 13.48}, 
-    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1,  distance: 75,   mass: 2.85,     vz: 11.55},
-    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5,  distance: 95,   mass: 0.5,   vz: 10.26}, 
-    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5,  distance: 115,  mass: 0.51,   vz: 9.32},
+    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53, distance: 30,   mass: 0.1,   vz: 18.26, trailColor: 0xff4422},
+    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5,  distance: 55,   mass: 9.54,    vz: 13.48, trailColor: 0xffaa77}, 
+    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1,  distance: 75,   mass: 2.85,     vz: 11.55, trailColor: 0xeeddcc},
+    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5,  distance: 95,   mass: 0.5,   vz: 10.26, trailColor: 0x88ccff}, 
+    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5,  distance: 115,  mass: 0.51,   vz: 9.32, trailColor: 0x4444ff},
   ];
 
   // ===============================================
@@ -139,7 +139,10 @@ async function main(){
     benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
     //clear the  scene
-    planets.forEach(p => scene.remove(p));
+    planets.forEach(p => {
+      scene.remove(p);
+      if (p.userData.trail) scene.remove(p.userData.trail.mesh);
+    });
     if (asteroidMesh) scene.remove(asteroidMesh);
     planets = [];
 
@@ -195,6 +198,33 @@ async function main(){
       
       planetMesh.userData.physicsIndex = currentBodyIndex;
       currentBodyIndex++; 
+
+      if (data.name !== 'Sun') {
+        const maxTrailPoints = 8000; //
+        const trailGeometry = new THREE.BufferGeometry();
+        const trailPositions = new Float32Array(maxTrailPoints * 3);
+        trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+        trailGeometry.setDrawRange(0, 0);
+
+        const trailMaterial = new THREE.LineBasicMaterial({
+          color: data.trailColor || 0xffffff,
+          transparent: true,
+          opacity: 0.3,
+          linewidth: 0.5
+        });
+
+        const trailMesh = new THREE.Line(trailGeometry, trailMaterial);
+        scene.add(trailMesh);
+
+        planetMesh.userData.trail = {
+          mesh: trailMesh,
+          positions: trailPositions,
+          pointCount: 0,
+          maxPoints: maxTrailPoints,
+          updateFreq: 2, // update every nth frame
+          ticks: 0
+        };
+      }
 
       scene.add(planetMesh);
       planets.push(planetMesh);
@@ -297,9 +327,37 @@ async function main(){
 
     planets.forEach((planet) => {
       const pIndex = planet.userData.physicsIndex * 4; 
-      planet.position.x = activePosMass[pIndex + 0];
-      planet.position.y = activePosMass[pIndex + 1];
-      planet.position.z = activePosMass[pIndex + 2];
+      const px = activePosMass[pIndex + 0];
+      const py = activePosMass[pIndex + 1];
+      const pz = activePosMass[pIndex + 2];
+      planet.position.x = px;
+      planet.position.y = py;
+      planet.position.z = pz;
+
+      if (planet.userData.trail) {
+        const trail = planet.userData.trail;
+        trail.ticks++;
+        if (trail.ticks >= trail.updateFreq) {
+          trail.ticks = 0;
+          if (trail.pointCount < trail.maxPoints) {
+            trail.positions[trail.pointCount * 3] = px;
+            trail.positions[trail.pointCount * 3 + 1] = py;
+            trail.positions[trail.pointCount * 3 + 2] = pz;
+            trail.pointCount++;
+            trail.mesh.geometry.setDrawRange(0, trail.pointCount);
+          } else {
+            for (let i = 0; i < trail.maxPoints - 1; i++) {
+              trail.positions[i * 3] = trail.positions[(i + 1) * 3];
+              trail.positions[i * 3 + 1] = trail.positions[(i + 1) * 3 + 1];
+              trail.positions[i * 3 + 2] = trail.positions[(i + 1) * 3 + 2];
+            }
+            trail.positions[(trail.maxPoints - 1) * 3] = px;
+            trail.positions[(trail.maxPoints - 1) * 3 + 1] = py;
+            trail.positions[(trail.maxPoints - 1) * 3 + 2] = pz;
+          }
+          trail.mesh.geometry.attributes.position.needsUpdate = true;
+        }
+      }
     });
 
     const asteroidPhysicsStartIndex = planetData.length;
