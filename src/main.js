@@ -284,8 +284,6 @@ async function main(){
   //every time the page loads
   //resetSimulation();
 
-
-
   // ===============================================
   // RENDER 
   // ===============================================
@@ -390,23 +388,19 @@ async function main(){
   } 
   //requestAnimationFrame(render);
   document.getElementById('enter-sim-btn').addEventListener('click', () => {
-    // 1. Grab values from the Welcome Page
     const initEngine = document.getElementById('initial-engine').value;
     const initAsteroids = document.getElementById('initial-asteroids').value;
     
-    // 2. Sync them to your hidden Live UI panel
     document.getElementById('engine-select').value = initEngine;
     document.getElementById('asteroid-input').value = initAsteroids;
     
-    // 3. Fade out the Welcome Screen
     const welcomeScreen = document.getElementById('welcome-screen');
     welcomeScreen.style.opacity = '0';
     setTimeout(() => {
         welcomeScreen.style.display = 'none'; // Remove it from layout
         document.getElementById('sim-ui').style.display = 'block'; // Show Live UI
     }, 500); 
-
-    // 4. Start the engine! 
+ 
     resetSimulation();
     requestAnimationFrame(render);
   });
