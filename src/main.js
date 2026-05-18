@@ -124,7 +124,7 @@ async function main(){
   // RESET FUNCTION 
   // ===============================================
 
-  function resetSimulation() {
+  async function resetSimulation() {
     useWasm = document.getElementById('engine-select').value === "WASM";
     ASTEROID_COUNT = parseInt(document.getElementById('asteroid-input').value);
 
@@ -272,14 +272,14 @@ async function main(){
     if(useWasm){
       wasm._preCalculateAccelerations();
     } else {
-      jsEngine.preCalculateAccelerations(TOTAL_BODIES); 
+      await jsEngine.preCalculateAccelerations(TOTAL_BODIES); 
     }
 
     console.log(`Simulation Reset: ${useWasm ? "WASM" : "JS"} with ${ASTEROID_COUNT} asteroids.`);
   }
 
   
-  document.getElementById('restart-btn').addEventListener('click', resetSimulation);
+  document.getElementById('restart-btn').addEventListener('click', () => { resetSimulation() });
 
   //every time the page loads
   //resetSimulation();
@@ -289,7 +289,7 @@ async function main(){
   // ===============================================
   const dt = 0.004;
 
-  function render(time){
+  async function render(time){
     if(resizeRenderer(renderer)){ 
       const canvas = renderer.domElement; 
       camera.aspect = canvas.clientWidth / canvas.clientHeight; 
@@ -301,7 +301,7 @@ async function main(){
     if(useWasm){
       wasm._stepPhysics(dt);  
     } else {
-      jsEngine.step(dt);
+      await jsEngine.step(dt);
     }
     
     const t1 = performance.now();
