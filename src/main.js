@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import PhysicsModule from '../cpp/physics_wasm.js';
 import { PhysicsEngineJS } from './physics_engine.js';
 //fimport { fill } from 'three/src/extras/TextureUtils.js';
 
@@ -110,7 +109,20 @@ async function main(){
   // AWAIT WASM ENGINE 
   // ===============================================
 
-  const wasm = await PhysicsModule();
+  const wasmWorker = new Worker(new URL('./wasm_worker.js', import.meta.url), { type: 'module' });
+  let wasmResolve = null;
+  let TOTAL_BODIES_GLOBAL = 0;
+
+  wasmWorker.onmessage = (e) => {
+      if (e.data.type === 'init_done') {
+          const wasmPosMass = new Float64Array(e.data.buffer, e.data.posMassPtr, TOTAL_BODIES_GLOBAL * 4);
+          const wasmVel = new Float64Array(e.data.buffer, e.data.velPtr, TOTAL_BODIES_GLOBAL * 3);
+          if (wasmResolve) wasmResolve({ wasmPosMass, wasmVel });
+      } else if (e.data.type === 'done') {
+          if (wasmResolve) wasmResolve();
+      }
+  };
+
   let jsEngine = null; 
 
   // Mesh setup 
@@ -146,16 +158,20 @@ async function main(){
     if (asteroidMesh) scene.remove(asteroidMesh);
     planets = [];
 
-    wasm._initEngine(TOTAL_BODIES);
-    const wasmPosMass = new Float64Array(wasm.HEAPF64.buffer, wasm._getPosMassPointer(), TOTAL_BODIES * 4);
-    const wasmVel = new Float64Array(wasm.HEAPF64.buffer, wasm._getVelPointer(), TOTAL_BODIES * 3);
-
+    TOTAL_BODIES_GLOBAL = TOTAL_BODIES;
     
-    jsEngine = new PhysicsEngineJS(TOTAL_BODIES);
-
-    //assign the pointers
-    activePosMass = useWasm ? wasmPosMass : jsEngine.posMass;
-    activeVel = useWasm ? wasmVel : jsEngine.vel;
+    if (useWasm) {
+      const ptrs = await new Promise(res => {
+        wasmResolve = res;
+        wasmWorker.postMessage({ type: 'init', maxBodies: TOTAL_BODIES });
+      });
+      activePosMass = ptrs.wasmPosMass;
+      activeVel = ptrs.wasmVel;
+    } else {
+      jsEngine = new PhysicsEngineJS(TOTAL_BODIES);
+      activePosMass = jsEngine.posMass;
+      activeVel = jsEngine.vel;
+    }
 
     let currentBodyIndex = 0; 
 
@@ -270,7 +286,10 @@ async function main(){
 
     // Pre-calculate Frame 0 Gravity
     if(useWasm){
-      wasm._preCalculateAccelerations();
+      await new Promise(res => {
+        wasmResolve = res;
+        wasmWorker.postMessage({ type: 'preCalc' });
+      });
     } else {
       await jsEngine.preCalculateAccelerations(TOTAL_BODIES); 
     }
@@ -279,7 +298,7 @@ async function main(){
   }
 
   
-  document.getElementById('restart-btn').addEventListener('click', () => { resetSimulation() });
+  document.getElementById('restart-btn').addEventListener('click', async () => { await resetSimulation(); });
 
   //every time the page loads
   //resetSimulation();
@@ -299,7 +318,10 @@ async function main(){
     const t0 = performance.now();
     
     if(useWasm){
-      wasm._stepPhysics(dt);  
+      await new Promise(res => {
+        wasmResolve = res;
+        wasmWorker.postMessage({ type: 'step', dt: dt });
+      });
     } else {
       await jsEngine.step(dt);
     }
@@ -387,7 +409,7 @@ async function main(){
     requestAnimationFrame(render);
   } 
   //requestAnimationFrame(render);
-  document.getElementById('enter-sim-btn').addEventListener('click', () => {
+  document.getElementById('enter-sim-btn').addEventListener('click', async () => {
     const initEngine = document.getElementById('initial-engine').value;
     const initAsteroids = document.getElementById('initial-asteroids').value;
     
@@ -401,7 +423,7 @@ async function main(){
         document.getElementById('sim-ui').style.display = 'block'; // Show Live UI
     }, 500); 
  
-    resetSimulation();
+    await resetSimulation();
     requestAnimationFrame(render);
   });
 }
