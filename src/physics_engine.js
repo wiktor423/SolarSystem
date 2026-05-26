@@ -64,6 +64,10 @@ export class PhysicsEngineJS {
             let zi = this.posMass[iPM + 2];
             let massI = this.posMass[iPM + 3];
 
+            let accXi = this.accel[i3 + 0];
+            let accYi = this.accel[i3 + 1];
+            let accZi = this.accel[i3 + 2];
+
             for(let j = i + 1; j < this.bodyCount; j++){
                 let jPM = j * 4;
                 let j3  = j * 3;
@@ -81,24 +85,22 @@ export class PhysicsEngineJS {
                 let dist = Math.sqrt(distSq);
 
                 let G_over_r3 = this.G / (distSq * dist); 
+                let fx = G_over_r3 * dx;
+                let fy = G_over_r3 * dy;
+                let fz = G_over_r3 * dz;
 
-                let ax_i = G_over_r3 * massJ * dx;
-                let ay_i = G_over_r3 * massJ * dy;
-                let az_i = G_over_r3 * massJ * dz;
+                accXi += massJ * fx;
+                accYi += massJ * fy;
+                accZi += massJ * fz;
 
-                let ax_j = G_over_r3 * massI * dx;
-                let ay_j = G_over_r3 * massI * dy;
-                let az_j = G_over_r3 * massI * dz;
-                
-
-                this.accel[i3 + 0] += ax_i;
-                this.accel[i3 + 1] += ay_i;
-                this.accel[i3 + 2] += az_i;
-
-                this.accel[j3 + 0] -= ax_j;
-                this.accel[j3 + 1] -= ay_j;
-                this.accel[j3 + 2] -= az_j;
+                this.accel[j3 + 0] -= massI * fx;
+                this.accel[j3 + 1] -= massI * fy;
+                this.accel[j3 + 2] -= massI * fz;
             }
+            
+            this.accel[i3 + 0] = accXi;
+            this.accel[i3 + 1] = accYi;
+            this.accel[i3 + 2] = accZi;
         }
     }
 }

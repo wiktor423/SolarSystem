@@ -7,7 +7,7 @@ import { PhysicsEngineJS } from './physics_engine.js';
 //====GLOBAL=STATE=====
 
 let useWasm = true;
-let ASTEROID_COUNT = 1400; 
+let ASTEROID_COUNT = 1500; //default value 
 let activePosMass = null;
 let activeVel = null;
 
