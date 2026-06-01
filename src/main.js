@@ -197,6 +197,8 @@ async function main(){
       activeVel[vIdx + 2] = data.vz;            
       
       planetMesh.userData.physicsIndex = currentBodyIndex;
+      planetMesh.userData.name = data.name;
+      planetMesh.userData.originalMass = data.mass;
       currentBodyIndex++; 
 
       if (data.name !== 'Sun') {
@@ -280,6 +282,60 @@ async function main(){
 
   
   document.getElementById('restart-btn').addEventListener('click', resetSimulation);
+
+  // ===============================================
+  // RAYCASTER AND PLANET SELECTION
+  // ===============================================
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let selectedPlanetMesh = null;
+
+  window.addEventListener('pointerdown', (event) => {
+    if (event.target.tagName !== 'CANVAS') return;
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const intersects = raycaster.intersectObjects(planets, true); 
+    if (intersects.length > 0) {
+      let object = intersects[0].object;
+      while (object && object.userData.physicsIndex === undefined && object.parent) {
+        object = object.parent;
+      }
+      
+      if (object && object.userData.physicsIndex !== undefined) {
+        selectedPlanetMesh = object;
+        const pIndex = object.userData.physicsIndex * 4;
+        const currentMass = activePosMass[pIndex + 3];
+        const originalMass = object.userData.originalMass;
+
+        document.getElementById('planet-ui').style.display = 'block';
+        document.getElementById('selected-planet-name').textContent = object.userData.name;
+        document.getElementById('selected-planet-mass-display').textContent = currentMass.toPrecision(4);
+        
+        const max_slider = Math.max(originalMass * 10, 20000)
+
+        const slider = document.getElementById('selected-planet-mass-slider');
+        slider.min = 0;
+        slider.max = max_slider; // allow planets to become heavier than the sun
+        slider.step = "any";
+        slider.value = currentMass;
+      }
+    } else {
+      document.getElementById('planet-ui').style.display = 'none';
+      selectedPlanetMesh = null;
+    }
+  });
+
+  document.getElementById('selected-planet-mass-slider').addEventListener('input', (event) => {
+    if (selectedPlanetMesh && activePosMass) {
+      const newMass = parseFloat(event.target.value);
+      const pIndex = selectedPlanetMesh.userData.physicsIndex * 4;
+      activePosMass[pIndex + 3] = newMass;
+      document.getElementById('selected-planet-mass-display').textContent = newMass.toPrecision(4);
+    }
+  });
 
   //every time the page loads
   //resetSimulation();
