@@ -1,15 +1,24 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import PhysicsModule from '../cpp/physics_wasm.js';
-import { PhysicsEngineJS } from './physics_engine.js';
+import {
+  PhysicsEngineJS,
+  BODY_STRIDE,
+  BODY_X,
+  BODY_Y,
+  BODY_Z,
+  BODY_MASS,
+  BODY_VX,
+  BODY_VY,
+  BODY_VZ,
+} from './physics_engine.js';
 //fimport { fill } from 'three/src/extras/TextureUtils.js';
 
 //====GLOBAL=STATE=====
 
 let useWasm = true;
 let ASTEROID_COUNT = 1500; //default value 
-let activePosMass = null;
-let activeVel = null;
+let activeBodies = null;
 
 const timeDisplay = document.getElementById('physics-time-display');
 const fpsDisplay = document.getElementById('physics-fps-display');
@@ -147,15 +156,15 @@ async function main(){
     planets = [];
 
     wasm._initEngine(TOTAL_BODIES);
-    const wasmPosMass = new Float64Array(wasm.HEAPF64.buffer, wasm._getPosMassPointer(), TOTAL_BODIES * 4);
-    const wasmVel = new Float64Array(wasm.HEAPF64.buffer, wasm._getVelPointer(), TOTAL_BODIES * 3);
+    const wasmBodies = new Float64Array(
+      wasm.HEAPF64.buffer,
+      wasm._getBodiesPointer(),
+      TOTAL_BODIES * BODY_STRIDE
+    );
 
-    
     jsEngine = new PhysicsEngineJS(TOTAL_BODIES);
 
-    //assign the pointers
-    activePosMass = useWasm ? wasmPosMass : jsEngine.posMass;
-    activeVel = useWasm ? wasmVel : jsEngine.vel;
+    activeBodies = useWasm ? wasmBodies : jsEngine.bodies;
 
     let currentBodyIndex = 0; 
 
@@ -184,17 +193,16 @@ async function main(){
         planetMesh.add(ringMesh);
       }
 
-      const pmIdx = currentBodyIndex * 4;
-      const vIdx = currentBodyIndex * 3;
+      const bodyIdx = currentBodyIndex * BODY_STRIDE;
 
-      activePosMass[pmIdx + 0] = data.distance; 
-      activePosMass[pmIdx + 1] = 0;             
-      activePosMass[pmIdx + 2] = 0;             
-      activePosMass[pmIdx + 3] = data.mass;     
+      activeBodies[bodyIdx + BODY_X] = data.distance;
+      activeBodies[bodyIdx + BODY_Y] = 0;
+      activeBodies[bodyIdx + BODY_Z] = 0;
+      activeBodies[bodyIdx + BODY_MASS] = data.mass;
 
-      activeVel[vIdx + 0] = 0;                  
-      activeVel[vIdx + 1] = 0;                  
-      activeVel[vIdx + 2] = data.vz;            
+      activeBodies[bodyIdx + BODY_VX] = 0;
+      activeBodies[bodyIdx + BODY_VY] = 0;
+      activeBodies[bodyIdx + BODY_VZ] = data.vz;            
       
       planetMesh.userData.physicsIndex = currentBodyIndex;
       currentBodyIndex++; 
@@ -248,20 +256,23 @@ async function main(){
       const mass = 0.00001;
       const radius = 0.05 + Math.random() * 0.05;
 
-      const pmIdx = currentBodyIndex * 4;
-      const vIdx = currentBodyIndex * 3;
+      const bodyIdx = currentBodyIndex * BODY_STRIDE;
 
-      activePosMass[pmIdx + 0] = x;
-      activePosMass[pmIdx + 1] = (Math.random() - 0.5) * 0.5;
-      activePosMass[pmIdx + 2] = z;
-      activePosMass[pmIdx + 3] = mass;
+      activeBodies[bodyIdx + BODY_X] = x;
+      activeBodies[bodyIdx + BODY_Y] = (Math.random() - 0.5) * 0.5;
+      activeBodies[bodyIdx + BODY_Z] = z;
+      activeBodies[bodyIdx + BODY_MASS] = mass;
 
-      activeVel[vIdx + 0] = vx;
-      activeVel[vIdx + 1] = 0;
-      activeVel[vIdx + 2] = vz;
+      activeBodies[bodyIdx + BODY_VX] = vx;
+      activeBodies[bodyIdx + BODY_VY] = 0;
+      activeBodies[bodyIdx + BODY_VZ] = vz;
 
       dummy.scale.set(radius, radius, radius);
-      dummy.position.set(activePosMass[pmIdx + 0], activePosMass[pmIdx + 1], activePosMass[pmIdx + 2]);
+      dummy.position.set(
+        activeBodies[bodyIdx + BODY_X],
+        activeBodies[bodyIdx + BODY_Y],
+        activeBodies[bodyIdx + BODY_Z]
+      );
       dummy.updateMatrix();
       asteroidMesh.setMatrixAt(i, dummy.matrix);
 
@@ -324,10 +335,10 @@ async function main(){
       }
 
     planets.forEach((planet) => {
-      const pIndex = planet.userData.physicsIndex * 4; 
-      const px = activePosMass[pIndex + 0];
-      const py = activePosMass[pIndex + 1];
-      const pz = activePosMass[pIndex + 2];
+      const bodyIdx = planet.userData.physicsIndex * BODY_STRIDE;
+      const px = activeBodies[bodyIdx + BODY_X];
+      const py = activeBodies[bodyIdx + BODY_Y];
+      const pz = activeBodies[bodyIdx + BODY_Z];
       planet.position.x = px;
       planet.position.y = py;
       planet.position.z = pz;
@@ -360,8 +371,12 @@ async function main(){
 
     const asteroidPhysicsStartIndex = planetData.length;
     for (let i = 0; i < ASTEROID_COUNT; i++) {
-      const pIndex = (asteroidPhysicsStartIndex + i) * 4; 
-      dummy.position.set(activePosMass[pIndex + 0], activePosMass[pIndex + 1], activePosMass[pIndex + 2]);
+      const bodyIdx = (asteroidPhysicsStartIndex + i) * BODY_STRIDE;
+      dummy.position.set(
+        activeBodies[bodyIdx + BODY_X],
+        activeBodies[bodyIdx + BODY_Y],
+        activeBodies[bodyIdx + BODY_Z]
+      );
       dummy.rotation.x += 0.01;
       dummy.rotation.y += 0.01;
       dummy.updateMatrix();

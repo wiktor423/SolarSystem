@@ -1,12 +1,22 @@
+export const BODY_STRIDE = 10;
+export const BODY_X = 0;
+export const BODY_Y = 1;
+export const BODY_Z = 2;
+export const BODY_MASS = 3;
+export const BODY_VX = 4;
+export const BODY_VY = 5;
+export const BODY_VZ = 6;
+export const BODY_AX = 7;
+export const BODY_AY = 8;
+export const BODY_AZ = 9;
+
 export class PhysicsEngineJS {
-    constructor(maxBodies){
-        this.maxBodies = maxBodies; 
-        this.bodyCount = 0; 
+    constructor(maxBodies) {
+        this.maxBodies = maxBodies;
+        this.bodyCount = 0;
         this.G = 1;
-        
-        this.posMass = new Float64Array(this.maxBodies * 4); 
-        this.vel     = new Float64Array(this.maxBodies * 3);
-        this.accel   = new Float64Array(this.maxBodies * 3);
+
+        this.bodies = new Float64Array(this.maxBodies * BODY_STRIDE);
     }
 
     preCalculateAccelerations(currentCount) {
@@ -14,93 +24,87 @@ export class PhysicsEngineJS {
         this.computeAccelerations();
     }
 
-    step(dt){
-        // 1. Update positions and half-step velocities
+    step(dt) {
         for (let i = 0; i < this.bodyCount; i++) {
-            let iPM = i * 4;
-            let i3  = i * 3;
+            const base = i * BODY_STRIDE;
 
-            let ax = this.accel[i3 + 0]; 
-            let ay = this.accel[i3 + 1];
-            let az = this.accel[i3 + 2];
+            const ax = this.bodies[base + BODY_AX];
+            const ay = this.bodies[base + BODY_AY];
+            const az = this.bodies[base + BODY_AZ];
 
-            // x = x + v*dt + 0.5*a*dt^2
-            this.posMass[iPM + 0] += this.vel[i3 + 0] * dt + 0.5 * ax * dt * dt;
-            this.posMass[iPM + 1] += this.vel[i3 + 1] * dt + 0.5 * ay * dt * dt;
-            this.posMass[iPM + 2] += this.vel[i3 + 2] * dt + 0.5 * az * dt * dt;
+            this.bodies[base + BODY_X] += this.bodies[base + BODY_VX] * dt + 0.5 * ax * dt * dt;
+            this.bodies[base + BODY_Y] += this.bodies[base + BODY_VY] * dt + 0.5 * ay * dt * dt;
+            this.bodies[base + BODY_Z] += this.bodies[base + BODY_VZ] * dt + 0.5 * az * dt * dt;
 
-            // half-step the velocity 
-            this.vel[i3 + 0] += 0.5 * ax * dt;
-            this.vel[i3 + 1] += 0.5 * ay * dt;
-            this.vel[i3 + 2] += 0.5 * az * dt;
-       }
+            this.bodies[base + BODY_VX] += 0.5 * ax * dt;
+            this.bodies[base + BODY_VY] += 0.5 * ay * dt;
+            this.bodies[base + BODY_VZ] += 0.5 * az * dt;
+        }
 
-       
-       this.computeAccelerations();
-       
-       for (let i = 0; i < this.bodyCount; i++) {
-            let i3 = i * 3;
+        this.computeAccelerations();
 
-            this.vel[i3 + 0] += 0.5 * this.accel[i3 + 0] * dt;
-            this.vel[i3 + 1] += 0.5 * this.accel[i3 + 1] * dt;
-            this.vel[i3 + 2] += 0.5 * this.accel[i3 + 2] * dt;
+        for (let i = 0; i < this.bodyCount; i++) {
+            const base = i * BODY_STRIDE;
+
+            this.bodies[base + BODY_VX] += 0.5 * this.bodies[base + BODY_AX] * dt;
+            this.bodies[base + BODY_VY] += 0.5 * this.bodies[base + BODY_AY] * dt;
+            this.bodies[base + BODY_VZ] += 0.5 * this.bodies[base + BODY_AZ] * dt;
         }
     }
- 
-    computeAccelerations(){
+
+    computeAccelerations() {
         for (let i = 0; i < this.bodyCount; i++) {
-            let i3 = i * 3;
-            this.accel[i3 + 0]  = 0; // ax
-            this.accel[i3 + 1]  = 0; // ay
-            this.accel[i3 + 2]  = 0; // az
+            const base = i * BODY_STRIDE;
+
+            this.bodies[base + BODY_AX] = 0;
+            this.bodies[base + BODY_AY] = 0;
+            this.bodies[base + BODY_AZ] = 0;
         }
 
-        for(let i = 0; i < this.bodyCount; i++){
-            let iPM = i * 4;
-            let i3  = i * 3;
+        for (let i = 0; i < this.bodyCount; i++) {
+            const iBase = i * BODY_STRIDE;
 
-            let xi = this.posMass[iPM + 0];
-            let yi = this.posMass[iPM + 1];
-            let zi = this.posMass[iPM + 2];
-            let massI = this.posMass[iPM + 3];
+            const xi = this.bodies[iBase + BODY_X];
+            const yi = this.bodies[iBase + BODY_Y];
+            const zi = this.bodies[iBase + BODY_Z];
+            const massI = this.bodies[iBase + BODY_MASS];
 
-            let accXi = this.accel[i3 + 0];
-            let accYi = this.accel[i3 + 1];
-            let accZi = this.accel[i3 + 2];
+            let accXi = this.bodies[iBase + BODY_AX];
+            let accYi = this.bodies[iBase + BODY_AY];
+            let accZi = this.bodies[iBase + BODY_AZ];
 
-            for(let j = i + 1; j < this.bodyCount; j++){
-                let jPM = j * 4;
-                let j3  = j * 3;
+            for (let j = i + 1; j < this.bodyCount; j++) {
+                const jBase = j * BODY_STRIDE;
 
-                let xj = this.posMass[jPM + 0];
-                let yj = this.posMass[jPM + 1];
-                let zj = this.posMass[jPM + 2];
-                let massJ = this.posMass[jPM + 3];
+                const xj = this.bodies[jBase + BODY_X];
+                const yj = this.bodies[jBase + BODY_Y];
+                const zj = this.bodies[jBase + BODY_Z];
+                const massJ = this.bodies[jBase + BODY_MASS];
 
-                let dx = xj - xi;
-                let dy = yj - yi;
-                let dz = zj - zi;
+                const dx = xj - xi;
+                const dy = yj - yi;
+                const dz = zj - zi;
 
-                let distSq = dx*dx + dy*dy + dz*dz + 0.0001; 
-                let dist = Math.sqrt(distSq);
+                const distSq = dx * dx + dy * dy + dz * dz + 0.0001;
+                const dist = Math.sqrt(distSq);
 
-                let G_over_r3 = this.G / (distSq * dist); 
-                let fx = G_over_r3 * dx;
-                let fy = G_over_r3 * dy;
-                let fz = G_over_r3 * dz;
+                const G_over_r3 = this.G / (distSq * dist);
+                const fx = G_over_r3 * dx;
+                const fy = G_over_r3 * dy;
+                const fz = G_over_r3 * dz;
 
                 accXi += massJ * fx;
                 accYi += massJ * fy;
                 accZi += massJ * fz;
 
-                this.accel[j3 + 0] -= massI * fx;
-                this.accel[j3 + 1] -= massI * fy;
-                this.accel[j3 + 2] -= massI * fz;
+                this.bodies[jBase + BODY_AX] -= massI * fx;
+                this.bodies[jBase + BODY_AY] -= massI * fy;
+                this.bodies[jBase + BODY_AZ] -= massI * fz;
             }
-            
-            this.accel[i3 + 0] = accXi;
-            this.accel[i3 + 1] = accYi;
-            this.accel[i3 + 2] = accZi;
+
+            this.bodies[iBase + BODY_AX] = accXi;
+            this.bodies[iBase + BODY_AY] = accYi;
+            this.bodies[iBase + BODY_AZ] = accZi;
         }
     }
 }
