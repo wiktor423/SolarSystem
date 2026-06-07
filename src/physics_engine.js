@@ -14,9 +14,19 @@ export class PhysicsEngineJS {
 
         this.numWorkers = 4;
         this.workers = [];
-        
+        this._computeResolve = null;
+        this._computeCompleted = 0;
+
         for (let i = 0; i < this.numWorkers; i++) {
             const worker = new Worker(new URL('./physics_worker.js', import.meta.url), { type: 'module' });
+            worker.onmessage = (e) => {
+                if (e.data.done) {
+                    this._computeCompleted++;
+                    if (this._computeCompleted === this.numWorkers && this._computeResolve) {
+                        this._computeResolve();
+                    }
+                }
+            };
             worker.postMessage({
                 type: 'init',
                 posMassBuffer: this.posMassBuffer,
@@ -67,34 +77,31 @@ export class PhysicsEngineJS {
  
     computeAccelerations(){
         return new Promise((resolve) => {
-            let completed = 0;
+            this._computeResolve = resolve;
+            this._computeCompleted = 0;
             const chunkSize = Math.ceil(this.bodyCount / this.numWorkers);
-            
+
             for (let w = 0; w < this.numWorkers; w++) {
                 const start = w * chunkSize;
                 const end = Math.min(start + chunkSize, this.bodyCount);
-                
+
                 if (start >= this.bodyCount) {
-                    completed++;
+                    this._computeCompleted++;
                     continue;
                 }
-
-                this.workers[w].onmessage = (e) => {
-                    if (e.data.done) {
-                        completed++;
-                        if (completed === this.numWorkers) resolve();
-                    }
-                };
 
                 this.workers[w].postMessage({
                     type: 'compute',
                     id: w,
                     bodyCount: this.bodyCount,
-                    start: start,
-                    end: end
+                    start,
+                    end
                 });
             }
-            if (completed === this.numWorkers) resolve();
+
+            if (this._computeCompleted === this.numWorkers) {
+                resolve();
+            }
         });
     }
 }

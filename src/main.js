@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PhysicsEngineJS } from './physics_engine.js';
-//fimport { fill } from 'three/src/extras/TextureUtils.js';
+import Chart from 'chart.js/auto';
 
 //====GLOBAL=STATE=====
 
@@ -58,6 +58,19 @@ const perfChart = new Chart(chartCtx, {
 //=======================
 
 async function main(){
+  if (!crossOriginIsolated) {
+    console.error(
+      'Multithreading requires cross-origin isolation (COOP/COEP headers). ' +
+      'Start the app with: python server.py'
+    );
+    alert(
+      'Multithreading requires cross-origin isolation.\n\n' +
+      'Please start the server with:\n  python server.py\n\n' +
+      'Then open http://localhost:8000'
+    );
+    return;
+  }
+
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
 
@@ -120,6 +133,9 @@ async function main(){
           if (wasmResolve) wasmResolve({ wasmPosMass, wasmVel });
       } else if (e.data.type === 'done') {
           if (wasmResolve) wasmResolve();
+      } else if (e.data.type === 'error') {
+          console.error('WASM worker error:', e.data.message, e.data.stack);
+          alert('WASM worker error: ' + e.data.message);
       }
   };
 
