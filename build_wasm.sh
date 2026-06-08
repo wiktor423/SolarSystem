@@ -4,7 +4,7 @@ set -euo pipefail
 emcc cpp/physics_engine.cpp -o cpp/physics_wasm.js \
   -pthread \
   -s USE_PTHREADS=1 \
-  -s PTHREAD_POOL_SIZE=4 \
+  -s PTHREAD_POOL_SIZE=12 \
   -s MODULARIZE=1 \
   -s EXPORT_ES6=1 \
   -s EXPORT_NAME='createModule' \
