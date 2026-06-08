@@ -104,4 +104,18 @@ export class PhysicsEngineJS {
             }
         });
     }
+
+    dispose() {
+        // Resolve any pending computeAccelerations() promise so that an
+        // in-flight step() call in the render loop can return instead of
+        // hanging forever after the workers are terminated.
+        if (this._computeResolve) {
+            this._computeResolve();
+            this._computeResolve = null;
+        }
+        for (const worker of this.workers) {
+            worker.terminate();
+        }
+        this.workers = [];
+    }
 }

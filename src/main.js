@@ -9,6 +9,11 @@ let useWasm = true;
 let ASTEROID_COUNT = 1400; 
 let activePosMass = null;
 let activeVel = null;
+// isResetting: true while a reset is running (render loop skips physics steps).
+// queuedReset: a reset was requested while one was already running; will be
+//              re-run automatically with the latest UI settings once done.
+let isResetting = false;
+let queuedReset = false;
 
 const timeDisplay = document.getElementById('physics-time-display');
 const fpsDisplay = document.getElementById('physics-fps-display');
@@ -123,19 +128,35 @@ async function main(){
   // ===============================================
 
   const wasmWorker = new Worker(new URL('./wasm_worker.js', import.meta.url), { type: 'module' });
-  let wasmResolve = null;
+    const wasmPending = new Map();
+    let wasmRequestId = 1;
   let TOTAL_BODIES_GLOBAL = 0;
 
+    function wasmRequest(type, payload = {}) {
+    return new Promise((resolve, reject) => {
+      const requestId = wasmRequestId++;
+      wasmPending.set(requestId, { resolve, reject });
+      wasmWorker.postMessage({ type, requestId, ...payload });
+    });
+    }
+
   wasmWorker.onmessage = (e) => {
+      const pending = wasmPending.get(e.data.requestId);
+      if (!pending) return;
+
       if (e.data.type === 'init_done') {
-          const wasmPosMass = new Float64Array(e.data.buffer, e.data.posMassPtr, TOTAL_BODIES_GLOBAL * 4);
-          const wasmVel = new Float64Array(e.data.buffer, e.data.velPtr, TOTAL_BODIES_GLOBAL * 3);
-          if (wasmResolve) wasmResolve({ wasmPosMass, wasmVel });
+        const wasmPosMass = new Float64Array(e.data.buffer, e.data.posMassPtr, TOTAL_BODIES_GLOBAL * 4);
+        const wasmVel = new Float64Array(e.data.buffer, e.data.velPtr, TOTAL_BODIES_GLOBAL * 3);
+        wasmPending.delete(e.data.requestId);
+        pending.resolve({ wasmPosMass, wasmVel });
       } else if (e.data.type === 'done') {
-          if (wasmResolve) wasmResolve();
+        wasmPending.delete(e.data.requestId);
+        pending.resolve();
       } else if (e.data.type === 'error') {
-          console.error('WASM worker error:', e.data.message, e.data.stack);
-          alert('WASM worker error: ' + e.data.message);
+        wasmPending.delete(e.data.requestId);
+        console.error('WASM worker error:', e.data.message, e.data.stack);
+        pending.reject(new Error(e.data.message));
+        alert('WASM worker error: ' + e.data.message);
       }
   };
 
@@ -153,6 +174,10 @@ async function main(){
   // ===============================================
 
   async function resetSimulation() {
+    // Null buffers immediately so the render loop skips during the entire reset.
+    activePosMass = null;
+    activeVel = null;
+
     useWasm = document.getElementById('engine-select').value === "WASM";
     ASTEROID_COUNT = parseInt(document.getElementById('asteroid-input').value);
 
@@ -175,12 +200,14 @@ async function main(){
     planets = [];
 
     TOTAL_BODIES_GLOBAL = TOTAL_BODIES;
+
+    if (jsEngine) {
+      jsEngine.dispose();
+      jsEngine = null;
+    }
     
     if (useWasm) {
-      const ptrs = await new Promise(res => {
-        wasmResolve = res;
-        wasmWorker.postMessage({ type: 'init', maxBodies: TOTAL_BODIES });
-      });
+      const ptrs = await wasmRequest('init', { maxBodies: TOTAL_BODIES });
       activePosMass = ptrs.wasmPosMass;
       activeVel = ptrs.wasmVel;
     } else {
@@ -302,10 +329,7 @@ async function main(){
 
     // Pre-calculate Frame 0 Gravity
     if(useWasm){
-      await new Promise(res => {
-        wasmResolve = res;
-        wasmWorker.postMessage({ type: 'preCalc' });
-      });
+      await wasmRequest('preCalc');
     } else {
       await jsEngine.preCalculateAccelerations(TOTAL_BODIES); 
     }
@@ -313,8 +337,27 @@ async function main(){
     console.log(`Simulation Reset: ${useWasm ? "WASM" : "JS"} with ${ASTEROID_COUNT} asteroids.`);
   }
 
+  // Queue-last reset: if a reset is already running, remember to run one more
+  // after it finishes (using the latest UI settings at that point).
+  async function enqueueReset() {
+    if (isResetting) {
+      queuedReset = true;
+      return;
+    }
+    isResetting = true;
+    queuedReset = false;
+    try {
+      await resetSimulation();
+    } catch (err) {
+      console.error('Reset failed:', err);
+    } finally {
+      isResetting = false;
+      if (queuedReset) enqueueReset();
+    }
+  }
+
   
-  document.getElementById('restart-btn').addEventListener('click', async () => { await resetSimulation(); });
+  document.getElementById('restart-btn').addEventListener('click', async () => { await enqueueReset(); });
 
   //every time the page loads
   //resetSimulation();
@@ -331,15 +374,29 @@ async function main(){
       camera.updateProjectionMatrix();    
     }
 
+    if (isResetting || !activePosMass || !asteroidMesh) {
+      requestAnimationFrame(render);
+      return;
+    }
+
     const t0 = performance.now();
-    
-    if(useWasm){
-      await new Promise(res => {
-        wasmResolve = res;
-        wasmWorker.postMessage({ type: 'step', dt: dt });
-      });
-    } else {
-      await jsEngine.step(dt);
+
+    try {
+      if(useWasm){
+        await wasmRequest('step', { dt: dt });
+      } else {
+        await jsEngine.step(dt);
+      }
+    } catch {
+      // A reset started while we were awaiting; bail out and let the render
+      // loop reschedule itself once the reset finishes.
+      requestAnimationFrame(render);
+      return;
+    }
+
+    if (isResetting || !activePosMass || !asteroidMesh) {
+      requestAnimationFrame(render);
+      return;
     }
     
     const t1 = performance.now();
@@ -439,7 +496,7 @@ async function main(){
         document.getElementById('sim-ui').style.display = 'block'; // Show Live UI
     }, 500); 
  
-    await resetSimulation();
+    await enqueueReset();
     requestAnimationFrame(render);
   });
 }

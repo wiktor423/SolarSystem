@@ -8,6 +8,7 @@ function locateFile(path) {
 
 self.onmessage = async (e) => {
     const data = e.data;
+    const requestId = data.requestId;
 
     try {
         if (data.type === 'init') {
@@ -19,19 +20,20 @@ self.onmessage = async (e) => {
 
             self.postMessage({
                 type: 'init_done',
+                requestId,
                 buffer: Module.HEAPF64.buffer,
                 posMassPtr,
                 velPtr,
             });
         } else if (data.type === 'preCalc') {
             Module._preCalculateAccelerations();
-            self.postMessage({ type: 'done' });
+            self.postMessage({ type: 'done', requestId });
         } else if (data.type === 'step') {
             Module._stepPhysics(data.dt);
-            self.postMessage({ type: 'done' });
+            self.postMessage({ type: 'done', requestId });
         }
     } catch (err) {
-        self.postMessage({ type: 'error', message: err.message, stack: err.stack });
+        self.postMessage({ type: 'error', requestId, message: err.message, stack: err.stack });
         throw err;
     }
 };
