@@ -3,6 +3,8 @@ import socketserver
 
 PORT = 8000
 
+socketserver.TCPServer.allow_reuse_address = True
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         # Required for SharedArrayBuffer and WASM pthreads

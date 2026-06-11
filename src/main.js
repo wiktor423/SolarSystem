@@ -20,7 +20,7 @@ const fpsDisplay = document.getElementById('physics-fps-display');
 let lastUiUpdateTime = 0;
 
 let frameCounter = 0;
-const max_frames = 2000;
+const max_frames = 1000;
 let benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
 
 const chartCtx = document.getElementById('performance-chart').getContext('2d');

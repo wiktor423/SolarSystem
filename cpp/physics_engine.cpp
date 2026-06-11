@@ -8,7 +8,7 @@ std::vector<double> vel;     //vx, vy, vz
 std::vector<double> accel;   //ax, ay, az
 
 int bodyCount = 0;
-const int NUM_THREADS = 4; 
+const int NUM_THREADS = 16; 
 
 void computeAccelBlock(int start, int end) {
     for (int i = start; i < end; i++) {

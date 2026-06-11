@@ -14,3 +14,4 @@ dist/
 *.txt
 benchmarks/
 references/
+main.md

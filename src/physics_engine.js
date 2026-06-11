@@ -12,7 +12,7 @@ export class PhysicsEngineJS {
         this.vel     = new Float64Array(this.velBuffer);
         this.accel   = new Float64Array(this.accelBuffer);
 
-        this.numWorkers = 4;
+        this.numWorkers = 16;
         this.workers = [];
         this._computeResolve = null;
         this._computeCompleted = 0;
