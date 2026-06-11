@@ -12,5 +12,6 @@ cpp/*.wasm
 dist/
 
 *.txt
-benchmarks/ 
+benchmarks/
 references/
+main.md

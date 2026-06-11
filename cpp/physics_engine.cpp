@@ -1,12 +1,62 @@
 #include <emscripten.h>
 #include <vector>
 #include <cmath>
+#include <thread>
 
 std::vector<double> posMass; //X, Y, Z, mass   || 32Bytes -> 50% of cache line
 std::vector<double> vel;     //vx, vy, vz 
 std::vector<double> accel;   //ax, ay, az
 
 int bodyCount = 0;
+const int NUM_THREADS = 16; 
+
+void computeAccelBlock(int start, int end) {
+    for (int i = start; i < end; i++) {
+        int iPM = i * 4;
+        int i3  = i * 3;
+        double iMass = posMass[iPM + 3];
+
+        double ax = 0.0;
+        double ay = 0.0;
+        double az = 0.0;
+
+        for(int j = 0; j < bodyCount; j++) {
+            if (i == j) continue;
+            
+            int jPM = j * 4;
+            double jMass = posMass[jPM + 3];
+
+            double dx = posMass[jPM + 0] - posMass[iPM + 0];
+            double dy = posMass[jPM + 1] - posMass[iPM + 1];
+            double dz = posMass[jPM + 2] - posMass[iPM + 2];
+
+            double distSq = dx*dx + dy*dy + dz*dz + 0.0001; 
+            double dist = std::sqrt(distSq); 
+
+            double G_over_r3 = 1.0 / (distSq * dist); 
+
+            ax += G_over_r3 * jMass * dx;
+            ay += G_over_r3 * jMass * dy;
+            az += G_over_r3 * jMass * dz;
+        }
+        accel[i3 + 0] = ax;
+        accel[i3 + 1] = ay;
+        accel[i3 + 2] = az;
+    }
+}
+
+void runThreads() {
+    std::vector<std::thread> threads;
+    int chunkSize = bodyCount / NUM_THREADS;
+    for (int t = 0; t < NUM_THREADS; t++) {
+        int start = t * chunkSize;
+        int end = (t == NUM_THREADS - 1) ? bodyCount : start + chunkSize;
+        threads.emplace_back(std::thread(computeAccelBlock, start, end));
+    }
+    for (auto& th : threads) {
+        th.join();
+    }
+}
 
 extern "C" {
     EMSCRIPTEN_KEEPALIVE
@@ -30,48 +80,7 @@ extern "C" {
         // Zero out the accelerations array
         std::fill(accel.begin(), accel.end(), 0.0);
 
-        for (int i = 0; i < bodyCount; i++) {
-            int iPM = i * 4;
-            int i3  = i * 3;
-            double iMass = posMass[iPM + 3];
-            double ix = posMass[iPM + 0];
-            double iy = posMass[iPM + 1];
-            double iz = posMass[iPM + 2];
-
-            double acc_xi = accel[i3 + 0];
-            double acc_yi = accel[i3 + 1];
-            double acc_zi = accel[i3 + 2];
-
-            for(int j = i + 1; j < bodyCount; j++) {
-                int jPM = j * 4;
-                int j3  = j * 3;
-                double jMass = posMass[jPM + 3];
-
-                double dx = posMass[jPM + 0] - ix;
-                double dy = posMass[jPM + 1] - iy;
-                double dz = posMass[jPM + 2] - iz;
-
-                double distSq = dx*dx + dy*dy + dz*dz + 0.0001; 
-                double dist = std::sqrt(distSq); 
-
-                double G_over_r3 = 1.0 / (distSq * dist); 
-                double fx = G_over_r3 * dx;
-                double fy = G_over_r3 * dy;
-                double fz = G_over_r3 * dz;
-
-                acc_xi += jMass * fx;
-                acc_yi += jMass * fy;
-                acc_zi += jMass * fz;
-                
-                accel[j3 + 0] -= iMass * fx;
-                accel[j3 + 1] -= iMass * fy;
-                accel[j3 + 2] -= iMass * fz;
-            }
-            
-            accel[i3 + 0] = acc_xi;
-            accel[i3 + 1] = acc_yi;
-            accel[i3 + 2] = acc_zi;
-        }
+        runThreads();
     }
 
     EMSCRIPTEN_KEEPALIVE
@@ -92,48 +101,7 @@ extern "C" {
         //Zero the accelerations
         std::fill(accel.begin(), accel.end(), 0.0); 
 
-        for (int i=0; i<bodyCount; i++){
-            int iPM = i * 4; 
-            int i3  = i * 3; 
-            double iMass = posMass[iPM + 3];
-            double ix = posMass[iPM + 0];
-            double iy = posMass[iPM + 1];
-            double iz = posMass[iPM + 2];
-
-            double acc_xi = accel[i3 + 0];
-            double acc_yi = accel[i3 + 1];
-            double acc_zi = accel[i3 + 2];
-
-            for(int j=i+1; j<bodyCount; j++){
-                int jPM = j * 4;
-                int j3  = j * 3;
-                double jMass = posMass[jPM + 3];
-
-                double dx = posMass[jPM + 0] - ix;
-                double dy = posMass[jPM + 1] - iy;
-                double dz = posMass[jPM + 2] - iz;
-
-                double distSq = dx*dx + dy*dy + dz*dz + 0.0001;
-                double dist = std::sqrt(distSq); 
-
-                double G_over_r3 = 1 / (distSq * dist); 
-                double fx = G_over_r3 * dx;
-                double fy = G_over_r3 * dy;
-                double fz = G_over_r3 * dz;
-
-                acc_xi += jMass * fx;
-                acc_yi += jMass * fy;
-                acc_zi += jMass * fz;
-                
-                accel[j3 + 0] -= iMass * fx;
-                accel[j3 + 1] -= iMass * fy;
-                accel[j3 + 2] -= iMass * fz;
-            }
-            
-            accel[i3 + 0] = acc_xi;
-            accel[i3 + 1] = acc_yi;
-            accel[i3 + 2] = acc_zi;
-        }
+        runThreads();
 
         for(int i=0; i<bodyCount; i++){
             int i3 = i * 3;

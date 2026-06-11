@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "chart.js": "^4.5.1",
     "three": "^0.183.2"
   },
   "devDependencies": {
