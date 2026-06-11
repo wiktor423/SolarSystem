@@ -6,7 +6,7 @@ import Chart from 'chart.js/auto';
 //====GLOBAL=STATE=====
 
 let useWasm = true;
-let ASTEROID_COUNT = 1400; 
+let ASTEROID_COUNT = 1500; //default value 
 let activePosMass = null;
 let activeVel = null;
 // isResetting: true while a reset is running (render loop skips physics steps).
