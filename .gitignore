@@ -15,4 +15,6 @@ dist/
 benchmarks/
 references/
 main.md 
-CLAUDE.md
+CLAUDE.md 
+
+docs/
