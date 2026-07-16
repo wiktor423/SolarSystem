@@ -14,4 +14,5 @@ dist/
 *.txt
 benchmarks/
 references/
-main.md
+main.md 
+CLAUDE.md
