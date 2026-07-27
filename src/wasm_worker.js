@@ -12,7 +12,11 @@ self.onmessage = async (e) => {
 
     try {
         if (data.type === 'init') {
-            Module = await createModule({ locateFile });
+            // Load the Emscripten module (and its pthread pool) only once;
+            // subsequent resets re-initialize the engine state in place.
+            if (!Module) {
+                Module = await createModule({ locateFile });
+            }
             Module._initEngine(data.maxBodies);
 
             const posMassPtr = Module._getPosMassPointer();
@@ -24,6 +28,10 @@ self.onmessage = async (e) => {
                 buffer: Module.HEAPF64.buffer,
                 posMassPtr,
                 velPtr,
+                // Echo the body count so the main thread sizes its heap views
+                // from this request, not from whatever its globals say by the
+                // time the response arrives.
+                maxBodies: data.maxBodies,
             });
         } else if (data.type === 'preCalc') {
             Module._preCalculateAccelerations();
@@ -34,6 +42,5 @@ self.onmessage = async (e) => {
         }
     } catch (err) {
         self.postMessage({ type: 'error', requestId, message: err.message, stack: err.stack });
-        throw err;
     }
 };

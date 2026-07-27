@@ -1,14 +1,13 @@
 export class PhysicsEngineJS {
     constructor(maxBodies){
-        this.maxBodies = maxBodies; 
-        this.bodyCount = 0; 
-        this.G = 1;
-        
-        this.posMassBuffer = new SharedArrayBuffer(this.maxBodies * 4 * Float64Array.BYTES_PER_ELEMENT); 
+        this.maxBodies = maxBodies;
+        this.bodyCount = 0;
+
+        this.posMassBuffer = new SharedArrayBuffer(this.maxBodies * 4 * Float64Array.BYTES_PER_ELEMENT);
         this.velBuffer     = new SharedArrayBuffer(this.maxBodies * 3 * Float64Array.BYTES_PER_ELEMENT);
         this.accelBuffer   = new SharedArrayBuffer(this.maxBodies * 3 * Float64Array.BYTES_PER_ELEMENT);
 
-        this.posMass = new Float64Array(this.posMassBuffer); 
+        this.posMass = new Float64Array(this.posMassBuffer);
         this.vel     = new Float64Array(this.velBuffer);
         this.accel   = new Float64Array(this.accelBuffer);
 
@@ -24,13 +23,14 @@ export class PhysicsEngineJS {
                     this._computeCompleted++;
                     if (this._computeCompleted === this.numWorkers && this._computeResolve) {
                         this._computeResolve();
+                        this._computeResolve = null;
                     }
                 }
             };
+            // Workers only read posMass and write accel; vel stays main-thread-only.
             worker.postMessage({
                 type: 'init',
                 posMassBuffer: this.posMassBuffer,
-                velBuffer: this.velBuffer,
                 accelBuffer: this.accelBuffer
             });
             this.workers.push(worker);
@@ -100,6 +100,7 @@ export class PhysicsEngineJS {
             }
 
             if (this._computeCompleted === this.numWorkers) {
+                this._computeResolve = null;
                 resolve();
             }
         });

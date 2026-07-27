@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
+  <title>N-Body Gravity Engine — JS vs WASM</title>
   <script type="importmap">
     {
       "imports": {
@@ -66,13 +68,81 @@
     #sim-ui {
       position: absolute; 
       top: 10px; left: 10px; 
-      background: rgba(0,0,0,0.8); 
-      color: white; 
-      padding: 15px; 
-      border-radius: 8px; 
+      background: rgba(10, 10, 20, 0.88);
+      color: #e0e0e0;
+      padding: 15px 18px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
       z-index: 100;
-      display: none; 
+      display: none;
+      min-width: 220px;
     }
+
+    #sim-ui h3 {
+      color: #fff;
+      letter-spacing: 0.04em;
+      font-size: 0.95em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 12px;
+    }
+
+    #sim-ui label {
+      font-size: 0.85em;
+      opacity: 0.65;
+    }
+
+    #sim-ui select,
+    #sim-ui input[type=number] {
+      background: rgba(255,255,255,0.07);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 4px 6px;
+    }
+
+    #sim-ui select option {
+      background: #12121f;
+      color: #e0e0e0;
+    }
+
+    .sim-btn {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.15);
+      cursor: pointer;
+      font-size: 0.88em;
+      font-family: sans-serif;
+      transition: background 0.2s, border-color 0.2s;
+      background: rgba(255,255,255,0.08);
+      color: #e0e0e0;
+    }
+    .sim-btn:hover {
+      background: rgba(255,255,255,0.16);
+      border-color: rgba(255,255,255,0.3);
+    }
+    .sim-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    #start-benchmark-btn,
+    #export-csv-btn {
+      background: rgba(76, 175, 80, 0.18);
+      border-color: rgba(76, 175, 80, 0.5);
+      color: #a5d6a7;
+    }
+    #start-benchmark-btn:hover:not(:disabled),
+    #export-csv-btn:hover:not(:disabled) {
+      background: rgba(76, 175, 80, 0.32);
+      border-color: rgba(76, 175, 80, 0.8);
+    }
+    #start-benchmark-btn:disabled,
+    #export-csv-btn:disabled {
+      opacity: 0.35;
+    }
+
   </style>
 
 </head>
@@ -100,7 +170,7 @@
         </div>
     </div>
 
-    <div id="sim-ui" style="opacity: 0.9;">
+    <div id="sim-ui">
         <h3 style="margin-top: 0;">Live Telemetry</h3>
         <label>Engine:</label>
         <select id="engine-select">
@@ -111,8 +181,13 @@
         <label>Asteroids:</label>
         <input type="number" id="asteroid-input" value="1400" step="100" style="width: 70px;">
         <br><br>
-        <button id="restart-btn" style="padding: 5px 10px; cursor: pointer;">Restart Environment</button>        
-        
+        <button id="restart-btn" class="sim-btn">Restart Environment</button>
+        <br>
+        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+          <button id="export-csv-btn" class="sim-btn" disabled>Export CSV</button>
+          <span id="benchmark-progress" style="font-family: monospace; font-size: 0.82em; color: #81c784; opacity: 0.9;">0 / 1000</span>
+        </div>
+
         <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">
             <div style="margin-bottom: 5px; font-family: monospace; font-size: 0.9em; opacity: 0.7;">
                 Physics Time: <span id="physics-time-display">0.00</span> ms

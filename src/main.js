@@ -6,14 +6,32 @@ import Chart from 'chart.js/auto';
 //====GLOBAL=STATE=====
 
 let useWasm = true;
-let ASTEROID_COUNT = 1500; //default value 
+let ASTEROID_COUNT = 1400; //default value, matches the UI inputs
+const MAX_ASTEROIDS = 50000;
+
+// Close encounters with the softened potential are not energy-bounded, so
+// slingshot-ejected bodies can reach extreme coordinates. Nothing non-finite
+// or absurdly large may ever be written into a GPU buffer (instance matrices,
+// trail vertices): NaN/Inf vertex data is undefined-behaviour territory for
+// GPU drivers. WORLD_LIMIT is far beyond the camera's far plane (1000), so
+// clamped bodies are simply frustum-culled.
+const WORLD_LIMIT = 5000;
+function safeCoord(v) {
+  if (!Number.isFinite(v)) return WORLD_LIMIT;
+  return v > WORLD_LIMIT ? WORLD_LIMIT : (v < -WORLD_LIMIT ? -WORLD_LIMIT : v);
+}
 let activePosMass = null;
 let activeVel = null;
+let asteroidRadii = null;
 // isResetting: true while a reset is running (render loop skips physics steps).
 // queuedReset: a reset was requested while one was already running; will be
 //              re-run automatically with the latest UI settings once done.
+// resetEpoch: bumped at the start of every reset so an in-flight frame that
+//             resumes after its awaited step can detect it belongs to a
+//             previous simulation and bail out.
 let isResetting = false;
 let queuedReset = false;
+let resetEpoch = 0;
 
 const timeDisplay = document.getElementById('physics-time-display');
 const fpsDisplay = document.getElementById('physics-fps-display');
@@ -77,7 +95,23 @@ async function main(){
   }
 
   const canvas = document.querySelector('#c');
-  const renderer = new THREE.WebGLRenderer({antialias: true, canvas}); 
+  const renderer = new THREE.WebGLRenderer({antialias: true, canvas});
+
+  // If the GPU driver resets (or the browser evicts the context), stop all
+  // GL work until the context comes back instead of hammering a dead/
+  // recovering context — resubmitting during driver recovery is exactly how
+  // one reset cascades into the next. Three.js re-uploads geometries and
+  // textures itself once the context is restored.
+  let contextLost = false;
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault(); // signal that we handle restoration
+    contextLost = true;
+    console.warn('WebGL context lost — pausing rendering until restored.');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    contextLost = false;
+    console.warn('WebGL context restored — resuming rendering.');
+  });
 
   const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
   camera.position.z = 70; 
@@ -124,47 +158,90 @@ async function main(){
   ];
 
   // ===============================================
-  // AWAIT WASM ENGINE 
+  // WASM ENGINE WORKER LIFECYCLE
   // ===============================================
+  // The worker is created lazily when the WASM engine is selected and
+  // terminated when switching to the JS engine. Terminating it also tears
+  // down the Emscripten pthread pool workers it spawned and releases the
+  // module's growable shared WASM heap — otherwise 17 orphaned workers and
+  // their memory stay alive alongside the JS engine's 16 workers.
 
-  const wasmWorker = new Worker(new URL('./wasm_worker.js', import.meta.url), { type: 'module' });
-    const wasmPending = new Map();
-    let wasmRequestId = 1;
-  let TOTAL_BODIES_GLOBAL = 0;
+  let wasmWorker = null;
+  const wasmPending = new Map();
+  let wasmRequestId = 1;
 
-    function wasmRequest(type, payload = {}) {
+  function ensureWasmWorker() {
+    if (wasmWorker) return;
+    wasmWorker = new Worker(new URL('./wasm_worker.js', import.meta.url), { type: 'module' });
+
+    wasmWorker.onmessage = (e) => {
+      const pending = wasmPending.get(e.data.requestId);
+      if (!pending) return;
+      wasmPending.delete(e.data.requestId);
+
+      if (e.data.type === 'init_done') {
+        // Size the views from the request echoed back by the worker, never
+        // from global state that a later reset may already have changed.
+        const wasmPosMass = new Float64Array(e.data.buffer, e.data.posMassPtr, e.data.maxBodies * 4);
+        const wasmVel = new Float64Array(e.data.buffer, e.data.velPtr, e.data.maxBodies * 3);
+        pending.resolve({ wasmPosMass, wasmVel });
+      } else if (e.data.type === 'done') {
+        pending.resolve();
+      } else if (e.data.type === 'error') {
+        console.error('WASM worker error:', e.data.message, e.data.stack);
+        pending.reject(new Error(e.data.message));
+      }
+    };
+
+    const worker = wasmWorker;
+    worker.onerror = (err) => {
+      // A stale error event from an already-replaced worker must not tear
+      // down its successor.
+      if (wasmWorker !== worker) return;
+      // An ErrorEvent (.message set) is a runtime error that escaped the
+      // worker; a plain Event means the worker never started — its module
+      // script failed to fetch/parse, or the browser killed it (e.g. OOM).
+      console.error('WASM worker crashed:', err.message ||
+        'worker failed to start (script fetch failed or the browser killed the worker)');
+      disposeWasmWorker();
+    };
+  }
+
+  function disposeWasmWorker() {
+    if (!wasmWorker) return;
+    wasmWorker.terminate();
+    wasmWorker = null;
+    // Settle every in-flight request so an awaiting render frame or reset
+    // can bail out instead of hanging forever on a dead worker.
+    for (const pending of wasmPending.values()) {
+      pending.reject(new Error('WASM worker disposed'));
+    }
+    wasmPending.clear();
+  }
+
+  function wasmRequest(type, payload = {}) {
     return new Promise((resolve, reject) => {
+      if (!wasmWorker) {
+        reject(new Error('WASM worker is not running'));
+        return;
+      }
       const requestId = wasmRequestId++;
       wasmPending.set(requestId, { resolve, reject });
       wasmWorker.postMessage({ type, requestId, ...payload });
     });
-    }
-
-  wasmWorker.onmessage = (e) => {
-      const pending = wasmPending.get(e.data.requestId);
-      if (!pending) return;
-
-      if (e.data.type === 'init_done') {
-        const wasmPosMass = new Float64Array(e.data.buffer, e.data.posMassPtr, TOTAL_BODIES_GLOBAL * 4);
-        const wasmVel = new Float64Array(e.data.buffer, e.data.velPtr, TOTAL_BODIES_GLOBAL * 3);
-        wasmPending.delete(e.data.requestId);
-        pending.resolve({ wasmPosMass, wasmVel });
-      } else if (e.data.type === 'done') {
-        wasmPending.delete(e.data.requestId);
-        pending.resolve();
-      } else if (e.data.type === 'error') {
-        wasmPending.delete(e.data.requestId);
-        console.error('WASM worker error:', e.data.message, e.data.stack);
-        pending.reject(new Error(e.data.message));
-        alert('WASM worker error: ' + e.data.message);
-      }
-  };
+  }
 
   let jsEngine = null; 
 
-  // Mesh setup 
+  // Mesh setup
   const baseGeometry = new THREE.SphereGeometry(1,32,32);
   const textureLoader = new THREE.TextureLoader();
+  // Textures are cached across resets; only materials/geometries are rebuilt.
+  const textureCache = new Map();
+  function getTexture(path) {
+    if (!textureCache.has(path)) textureCache.set(path, textureLoader.load(path));
+    return textureCache.get(path);
+  }
   let planets = [];
   let asteroidMesh = null;
   const dummy = new THREE.Object3D();
@@ -175,42 +252,81 @@ async function main(){
 
   async function resetSimulation() {
     // Null buffers immediately so the render loop skips during the entire reset.
+    resetEpoch++;
     activePosMass = null;
     activeVel = null;
 
     useWasm = document.getElementById('engine-select').value === "WASM";
-    ASTEROID_COUNT = parseInt(document.getElementById('asteroid-input').value);
+    const requestedCount = parseInt(document.getElementById('asteroid-input').value, 10);
+    ASTEROID_COUNT = Number.isFinite(requestedCount)
+      ? Math.min(Math.max(requestedCount, 0), MAX_ASTEROIDS)
+      : 1400;
+    document.getElementById('asteroid-input').value = ASTEROID_COUNT;
 
     perfChart.data.datasets[0].data = Array(maxDataPoints).fill(0);
     perfChart.data.datasets[0].borderColor = useWasm ? '#4CAF50' : '#FF9800';
     perfChart.update();
-    
+
     const TOTAL_BODIES = planetData.length + ASTEROID_COUNT;
 
     //clear benchmark data
     frameCounter = 0;
     benchmarkData = [["Frame", "AsteroidCount", "PhysicsTime_ms", "RenderTime_ms"]];
+    const exportBtn = document.getElementById('export-csv-btn');
+    if (exportBtn) exportBtn.disabled = true;
+    const progDisplay = document.getElementById('benchmark-progress');
+    if (progDisplay) progDisplay.textContent = '0 / 1000';
 
-    //clear the  scene
+    //clear the scene, releasing GPU resources of the previous run
+    //(textures are cached and reused; baseGeometry is shared and kept)
     planets.forEach(p => {
       scene.remove(p);
-      if (p.userData.trail) scene.remove(p.userData.trail.mesh);
+      p.material.dispose();
+      p.children.forEach(child => {          // Saturn's ring
+        child.geometry.dispose();
+        child.material.dispose();
+      });
+      if (p.userData.trail) {
+        scene.remove(p.userData.trail.mesh);
+        p.userData.trail.mesh.geometry.dispose();
+        p.userData.trail.mesh.material.dispose();
+      }
     });
-    if (asteroidMesh) scene.remove(asteroidMesh);
+    if (asteroidMesh) {
+      scene.remove(asteroidMesh);
+      asteroidMesh.geometry.dispose();
+      asteroidMesh.material.dispose();
+      asteroidMesh.dispose();
+      asteroidMesh = null;
+    }
     planets = [];
-
-    TOTAL_BODIES_GLOBAL = TOTAL_BODIES;
 
     if (jsEngine) {
       jsEngine.dispose();
       jsEngine = null;
     }
-    
+
     if (useWasm) {
-      const ptrs = await wasmRequest('init', { maxBodies: TOTAL_BODIES });
+      ensureWasmWorker();
+      let ptrs;
+      try {
+        ptrs = await wasmRequest('init', { maxBodies: TOTAL_BODIES });
+      } catch (err) {
+        // A worker that dies during startup (transient script-fetch failure,
+        // browser-side kill) surfaces here as a rejected init. One retry with
+        // a fresh worker recovers the transient case; a persistent failure
+        // still propagates to enqueueReset.
+        console.warn('WASM init failed, retrying with a fresh worker:', err.message);
+        disposeWasmWorker();
+        ensureWasmWorker();
+        ptrs = await wasmRequest('init', { maxBodies: TOTAL_BODIES });
+      }
       activePosMass = ptrs.wasmPosMass;
       activeVel = ptrs.wasmVel;
     } else {
+      // Switching away from WASM: kill the worker, its pthread pool and the
+      // shared WASM heap so they don't linger for the whole JS run.
+      disposeWasmWorker();
       jsEngine = new PhysicsEngineJS(TOTAL_BODIES);
       activePosMass = jsEngine.posMass;
       activeVel = jsEngine.vel;
@@ -219,9 +335,9 @@ async function main(){
     let currentBodyIndex = 0; 
 
     planetData.forEach((data) => {
-      let material = data.name == 'Sun' ? 
-          new THREE.MeshBasicMaterial({ map: textureLoader.load(data.texturePath) }) : 
-          new THREE.MeshPhongMaterial({ map: textureLoader.load(data.texturePath), shininess: 10 });
+      let material = data.name == 'Sun' ?
+          new THREE.MeshBasicMaterial({ map: getTexture(data.texturePath) }) :
+          new THREE.MeshPhongMaterial({ map: getTexture(data.texturePath), shininess: 10 });
 
       const planetMesh = new THREE.Mesh(baseGeometry, material);
       planetMesh.scale.set(data.radius, data.radius, data.radius);
@@ -230,8 +346,8 @@ async function main(){
      if(data.name == 'Saturn'){
         const ringGeometry = new THREE.RingGeometry(1.2, 1.7, 64); 
         
-        const ringMaterial = new THREE.MeshBasicMaterial({ 
-          map: textureLoader.load("textures/saturn_ring.png"),
+        const ringMaterial = new THREE.MeshBasicMaterial({
+          map: getTexture("textures/saturn_ring.png"),
           side: THREE.DoubleSide, 
           transparent: true,
           opacity: 0.8
@@ -290,11 +406,13 @@ async function main(){
     });
 
     //Asteroids
-    const rockGeometry = new THREE.DodecahedronGeometry(1, 0); 
+    const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
     const rockMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0xffffff,shininess: 1});
     asteroidMesh = new THREE.InstancedMesh(rockGeometry, rockMaterial, ASTEROID_COUNT);
-    asteroidMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); 
+    asteroidMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(asteroidMesh);
+
+    asteroidRadii = new Float32Array(ASTEROID_COUNT);
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
       const distance = 32 + Math.random() * 20; 
@@ -306,6 +424,7 @@ async function main(){
       const vz = Math.cos(angle) * velocity;
       const mass = 0.00001;
       const radius = 0.05 + Math.random() * 0.05;
+      asteroidRadii[i] = radius;
 
       const pmIdx = currentBodyIndex * 4;
       const vIdx = currentBodyIndex * 3;
@@ -320,6 +439,7 @@ async function main(){
       activeVel[vIdx + 2] = vz;
 
       dummy.scale.set(radius, radius, radius);
+      dummy.rotation.set(i * 2.4, i * 1.7, 0);
       dummy.position.set(activePosMass[pmIdx + 0], activePosMass[pmIdx + 1], activePosMass[pmIdx + 2]);
       dummy.updateMatrix();
       asteroidMesh.setMatrixAt(i, dummy.matrix);
@@ -368,7 +488,12 @@ async function main(){
   const dt = 0.004;
 
   async function render(time){
-    if(resizeRenderer(renderer)){ 
+    if (contextLost) {
+      requestAnimationFrame(render);
+      return;
+    }
+
+    if(resizeRenderer(renderer)){
       const canvas = renderer.domElement; 
       camera.aspect = canvas.clientWidth / canvas.clientHeight; 
       camera.updateProjectionMatrix();    
@@ -379,6 +504,7 @@ async function main(){
       return;
     }
 
+    const epochAtFrame = resetEpoch;
     const t0 = performance.now();
 
     try {
@@ -394,7 +520,9 @@ async function main(){
       return;
     }
 
-    if (isResetting || !activePosMass || !asteroidMesh) {
+    // Drop the frame if any reset began while the step was in flight, even
+    // one that already finished (the step result belongs to the old world).
+    if (isResetting || epochAtFrame !== resetEpoch || !activePosMass || !asteroidMesh) {
       requestAnimationFrame(render);
       return;
     }
@@ -420,9 +548,9 @@ async function main(){
 
     planets.forEach((planet) => {
       const pIndex = planet.userData.physicsIndex * 4; 
-      const px = activePosMass[pIndex + 0];
-      const py = activePosMass[pIndex + 1];
-      const pz = activePosMass[pIndex + 2];
+      const px = safeCoord(activePosMass[pIndex + 0]);
+      const py = safeCoord(activePosMass[pIndex + 1]);
+      const pz = safeCoord(activePosMass[pIndex + 2]);
       planet.position.x = px;
       planet.position.y = py;
       planet.position.z = pz;
@@ -439,11 +567,8 @@ async function main(){
             trail.pointCount++;
             trail.mesh.geometry.setDrawRange(0, trail.pointCount);
           } else {
-            for (let i = 0; i < trail.maxPoints - 1; i++) {
-              trail.positions[i * 3] = trail.positions[(i + 1) * 3];
-              trail.positions[i * 3 + 1] = trail.positions[(i + 1) * 3 + 1];
-              trail.positions[i * 3 + 2] = trail.positions[(i + 1) * 3 + 2];
-            }
+            // Shift the whole window left by one point (fast memmove)
+            trail.positions.copyWithin(0, 3);
             trail.positions[(trail.maxPoints - 1) * 3] = px;
             trail.positions[(trail.maxPoints - 1) * 3 + 1] = py;
             trail.positions[(trail.maxPoints - 1) * 3 + 2] = pz;
@@ -454,11 +579,18 @@ async function main(){
     });
 
     const asteroidPhysicsStartIndex = planetData.length;
+    const spin = time * 0.0005;
     for (let i = 0; i < ASTEROID_COUNT; i++) {
-      const pIndex = (asteroidPhysicsStartIndex + i) * 4; 
-      dummy.position.set(activePosMass[pIndex + 0], activePosMass[pIndex + 1], activePosMass[pIndex + 2]);
-      dummy.rotation.x += 0.01;
-      dummy.rotation.y += 0.01;
+      const pIndex = (asteroidPhysicsStartIndex + i) * 4;
+      dummy.position.set(
+        safeCoord(activePosMass[pIndex + 0]),
+        safeCoord(activePosMass[pIndex + 1]),
+        safeCoord(activePosMass[pIndex + 2])
+      );
+      // Per-asteroid size and a slow deterministic tumble; the shared dummy
+      // must be fully re-set every instance, it carries state otherwise.
+      dummy.scale.setScalar(asteroidRadii[i]);
+      dummy.rotation.set(spin + i * 2.4, spin * 0.7 + i * 1.7, 0);
       dummy.updateMatrix();
       asteroidMesh.setMatrixAt(i, dummy.matrix);
     }
@@ -473,32 +605,44 @@ async function main(){
 
     if(frameCounter < max_frames){
       benchmarkData.push([frameCounter, ASTEROID_COUNT, physicsTime.toFixed(4), renderTime.toFixed(4)]);
+      const progDisplay = document.getElementById('benchmark-progress');
+      if (progDisplay) progDisplay.textContent = `${frameCounter + 1} / ${max_frames}`;
     } else if(frameCounter === max_frames){
-      //exportToCSV(); 
+      const exportBtn = document.getElementById('export-csv-btn');
+      if (exportBtn) exportBtn.disabled = false;
+      const progDisplay = document.getElementById('benchmark-progress');
+      if (progDisplay) progDisplay.textContent = 'Ready';
     }
-
     frameCounter++;
 
     requestAnimationFrame(render);
   } 
-  //requestAnimationFrame(render);
+  let renderLoopStarted = false;
   document.getElementById('enter-sim-btn').addEventListener('click', async () => {
+    // Guard against double-clicks: a second click would start a second
+    // concurrent render loop, doubling the physics rate.
+    if (renderLoopStarted) return;
+    renderLoopStarted = true;
+    document.getElementById('enter-sim-btn').disabled = true;
+
     const initEngine = document.getElementById('initial-engine').value;
     const initAsteroids = document.getElementById('initial-asteroids').value;
-    
+
     document.getElementById('engine-select').value = initEngine;
     document.getElementById('asteroid-input').value = initAsteroids;
-    
+
     const welcomeScreen = document.getElementById('welcome-screen');
     welcomeScreen.style.opacity = '0';
     setTimeout(() => {
         welcomeScreen.style.display = 'none'; // Remove it from layout
         document.getElementById('sim-ui').style.display = 'block'; // Show Live UI
-    }, 500); 
- 
+    }, 500);
+
     await enqueueReset();
     requestAnimationFrame(render);
   });
+
+  document.getElementById('export-csv-btn').addEventListener('click', () => { exportToCSV(); });
 }
 
 function resizeRenderer(renderer){
@@ -519,10 +663,12 @@ function exportToCSV(){
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
   link.setAttribute("download", `${useWasm ? 'WASM' : 'JS'}_${ASTEROID_COUNT}.csv`);
-  link.style_visibility = 'hidden';document.body.appendChild(link);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  console.log("benchmark complete");
+  URL.revokeObjectURL(url);
+  console.log(`benchmark exported (${benchmarkData.length - 1} frames)`);
 }
 
 main();

@@ -12,7 +12,7 @@ emcc cpp/physics_engine.cpp -o cpp/physics_wasm.js \
   -s EXPORTED_RUNTIME_METHODS='["HEAPF64"]' \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s ENVIRONMENT=web,worker \
-  -O3 -msimd128 -ffast-math
+  -O3 -msimd128 
 
-echo "Built cpp/physics_wasm.js with 4 pthread workers"
+echo "Built cpp/physics_wasm.js with a 16-worker pthread pool"
 python3 server.py 
