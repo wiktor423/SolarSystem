@@ -89,13 +89,13 @@ extern "C" {
             int iPM = i * 4;
             int i3 = i * 3;
 
-            posMass[iPM + 0] = posMass[iPM + 0] + vel[i3 + 0] * dt + 0.5 * accel[i3 + 0] * dt * dt;
-            posMass[iPM + 1] = posMass[iPM + 1] + vel[i3 + 1] * dt + 0.5 * accel[i3 + 1] * dt * dt;
-            posMass[iPM + 2] = posMass[iPM + 2] + vel[i3 + 2] * dt + 0.5 * accel[i3 + 2] * dt * dt;
+            posMass[iPM + 0] += vel[i3 + 0] * dt + 0.5 * accel[i3 + 0] * dt * dt;
+            posMass[iPM + 1] += vel[i3 + 1] * dt + 0.5 * accel[i3 + 1] * dt * dt;
+            posMass[iPM + 2] += vel[i3 + 2] * dt + 0.5 * accel[i3 + 2] * dt * dt;
 
-            vel[i3 + 0] = vel[i3 + 0] + 0.5 * accel[i3 + 0] * dt;
-            vel[i3 + 1] = vel[i3 + 1] + 0.5 * accel[i3 + 1] * dt;
-            vel[i3 + 2] = vel[i3 + 2] + 0.5 * accel[i3 + 2] * dt;
+            vel[i3 + 0] += 0.5 * accel[i3 + 0] * dt;
+            vel[i3 + 1] += 0.5 * accel[i3 + 1] * dt;
+            vel[i3 + 2] += 0.5 * accel[i3 + 2] * dt;
         }
 
         runThreads();

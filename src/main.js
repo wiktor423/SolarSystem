@@ -13,9 +13,9 @@ const MAX_ASTEROIDS = 50000;
 // slingshot-ejected bodies can reach extreme coordinates. Nothing non-finite
 // or absurdly large may ever be written into a GPU buffer (instance matrices,
 // trail vertices): NaN/Inf vertex data is undefined-behaviour territory for
-// GPU drivers. WORLD_LIMIT is far beyond the camera's far plane (1000), so
+// GPU drivers. WORLD_LIMIT is far beyond the camera's far plane (4000), so
 // clamped bodies are simply frustum-culled.
-const WORLD_LIMIT = 5000;
+const WORLD_LIMIT = 20000;
 function safeCoord(v) {
   if (!Number.isFinite(v)) return WORLD_LIMIT;
   return v > WORLD_LIMIT ? WORLD_LIMIT : (v < -WORLD_LIMIT ? -WORLD_LIMIT : v);
@@ -97,12 +97,16 @@ async function main(){
   const canvas = document.querySelector('#c');
   const renderer = new THREE.WebGLRenderer({antialias: true, canvas});
 
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.35;
+
   // If the GPU driver resets (or the browser evicts the context), stop all
   // GL work until the context comes back instead of hammering a dead/
   // recovering context — resubmitting during driver recovery is exactly how
   // one reset cascades into the next. Three.js re-uploads geometries and
   // textures itself once the context is restored.
   let contextLost = false;
+
   canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault(); // signal that we handle restoration
     contextLost = true;
@@ -113,49 +117,103 @@ async function main(){
     console.warn('WebGL context restored — resuming rendering.');
   });
 
-  const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-  camera.position.z = 70; 
-  camera.position.y = 40;
+  // The far plane must clear the star shell (radius ~1900); the near plane is
+  // pulled out to 0.5 to buy back the depth-buffer precision that the wider
+  // far/near ratio would otherwise cost. The smallest rendered body has a
+  // radius of 0.05, so 0.5 never clips anything the camera can reach.
+  const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.5, 4000);
+  camera.position.z = 95;
+  camera.position.y = 52;
   camera.lookAt(0, 0, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;    
+  controls.enableDamping = true;
   controls.dampingFactor = 0.05;
+  controls.minDistance = 6;
+  controls.maxDistance = 1200;   // stay inside the star shell
 
   const scene = new THREE.Scene();
-  const light = new THREE.PointLight(0xffffee, 200, 400);
+  // Inverse-square falloff over a system that now reaches d = 155 needs a
+  // much larger nominal intensity than the old d = 115 layout: irradiance at
+  // Earth's orbit (d = 30) is 900/30^2 = 1.0, and the filmic tone curve rolls
+  // off the resulting overexposure at Mercury (4.6) instead of clipping it.
+  // The faint blue ambient term keeps the night sides from going pure black.
+  const light = new THREE.PointLight(0xfff4e0, 900, 900);
   light.position.set(0, 0, 0);
   scene.add(light);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+  scene.add(new THREE.AmbientLight(0x33405e, 2));
 
-  // Add stars background
-  const starsGeometry = new THREE.BufferGeometry();
-  const starsMaterial = new THREE.PointsMaterial({color: 0xffffff, size: 0.1});
-  const starsVertices = []; 
-
-  for (let i = 0; i < 1000; i++) {
-    const x = THREE.MathUtils.randFloatSpread(1000);
-    const y = THREE.MathUtils.randFloatSpread(1000);
-    const z = THREE.MathUtils.randFloatSpread(1000);
-    starsVertices.push(x, y, z);
+  // Star background: two point layers on a spherical shell rather than a cube.
+  // A shell reads as a distant sky from every camera angle, whereas a filled
+  // cube puts individual stars close to the camera, where perspective makes
+  // them look like foreground debris. Size attenuation is disabled so a star
+  // keeps a constant pixel size regardless of camera distance.
+  function makeStarLayer(count, radius, size, opacity, hueSpread) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const c = new THREE.Color();
+    for (let i = 0; i < count; i++) {
+      // Uniform sampling on the sphere: z is uniform in [-1,1], not the polar
+      // angle, which would otherwise crowd the poles.
+      const u = Math.random() * 2 - 1;
+      const theta = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const r = radius * (0.9 + Math.random() * 0.2);
+      pos[i * 3 + 0] = r * s * Math.cos(theta);
+      pos[i * 3 + 1] = r * u;
+      pos[i * 3 + 2] = r * s * Math.sin(theta);
+      // Stellar colours run blue-white to orange; a narrow hue band around
+      // the blue/amber ends keeps the field from looking like confetti.
+      c.setHSL(Math.random() < 0.5 ? 0.58 + Math.random() * hueSpread
+                                   : 0.09 - Math.random() * hueSpread,
+               0.35, 0.72 + Math.random() * 0.28);
+      col[i * 3 + 0] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const mat = new THREE.PointsMaterial({
+      size, sizeAttenuation: false, vertexColors: true,
+      transparent: true, opacity, depthWrite: false
+    });
+    return new THREE.Points(geo, mat);
   }
+  scene.add(makeStarLayer(7000, 1700, 1.1, 0.55, 0.05));  // faint background
+  scene.add(makeStarLayer(700,  1700, 1.5, 0.45, 0.05));  // bright foreground
 
-  starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
-  const starField = new THREE.Points(starsGeometry, starsMaterial);
-  scene.add(starField);
-
+  // `rotationHours` is the sidereal rotation period and `tiltDeg` the axial
+  // obliquity, both real values (NASA planetary fact sheets). Bodies always
+  // spin the same way about their own +Y axis; retrograde rotation falls out
+  // of an obliquity past 90 degrees, which is how Venus (177.4) and Uranus
+  // (97.8) are actually described — no separate direction flag needed.
+  // `mass` is the true Sun-to-planet mass ratio expressed in the simulation's
+  // normalized unit system (G = 1, M_sun = 10000), i.e. m = 10000 / (M_sun/M_p)
+  // with the ratios taken from the IAU/NASA planetary fact sheets. `vz` is the
+  // circular-orbit speed sqrt(G*M_sun/d) = 100/sqrt(d) for the listed radius,
+  // so every entry is dynamically consistent with its own distance.
+  // `distance` is the only quantity deliberately unfaithful to reality: the
+  // orbital radii are compressed for legibility (Section 2.5 of the thesis).
   const planetData = [
-    {name: 'Sun',     texturePath: 'textures/sun-texture.jpg',     radius: 3,    distance: 0,    mass: 10000, vz: 0, trailColor: 0xffcc33},
-    {name: 'Mercury', texturePath: 'textures/mercury.jpg', radius: 0.2,  distance: 10,   mass: 0.0016,  vz: 31.62, trailColor: 0xaaaaaa},
-    {name: 'Venus',   texturePath: 'textures/venus.jpg',   radius: 0.9,  distance: 16,   mass: 0.024,   vz: 25.00, trailColor: 0xffaa00},
-    {name: 'Earth',   texturePath: 'textures/earth.jpg',   radius: 1, distance: 22,   mass: 0.03,  vz: 21.32, trailColor: 0x4488ff}, 
-    //{name: 'Moon',    texturePath: 'textures/moon.jpg',    radius: 0.01, distance: 22.1,   mass: 0.0003,vz: 21.86}, 
-    {name: 'Mars',    texturePath: 'textures/mars.jpg',    radius: 0.53, distance: 30,   mass: 0.1,   vz: 18.26, trailColor: 0xff4422},
-    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg', radius: 2.5,  distance: 55,   mass: 9.54,    vz: 13.48, trailColor: 0xffaa77}, 
-    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',  radius: 2.1,  distance: 75,   mass: 2.85,     vz: 11.55, trailColor: 0xeeddcc},
-    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',  radius: 1.5,  distance: 95,   mass: 0.5,   vz: 10.26, trailColor: 0x88ccff}, 
-    {name: 'Neptune', texturePath: 'textures/neptune.jpg', radius: 1.5,  distance: 115,  mass: 0.51,   vz: 9.32, trailColor: 0x4444ff},
+    {name: 'Sun',     texturePath: 'textures/sun-texture.jpg', radius: 3,    distance: 0,   mass: 10000,    vz: 0,     trailColor: 0xffcc33, rotationHours: 609.12, tiltDeg: 7.25},
+    {name: 'Mercury', texturePath: 'textures/mercury.jpg',     radius: 0.2,  distance: 14,  mass: 0.00166,  vz: 26.73, trailColor: 0xaaaaaa, rotationHours: 1407.6, tiltDeg: 0.03},
+    {name: 'Venus',   texturePath: 'textures/venus.jpg',       radius: 0.9,  distance: 22,  mass: 0.02448,  vz: 21.32, trailColor: 0xffaa00, rotationHours: 5832.5, tiltDeg: 177.36},
+    {name: 'Earth',   texturePath: 'textures/earth.jpg',       radius: 1,    distance: 30,  mass: 0.03003,  vz: 18.26, trailColor: 0x4488ff, rotationHours: 23.93,  tiltDeg: 23.44},
+    //{name: 'Moon',    texturePath: 'textures/moon.jpg',    radius: 0.01, distance: 22.1,   mass: 0.0003,vz: 21.86},
+    {name: 'Mars',    texturePath: 'textures/mars.jpg',        radius: 0.53, distance: 41,  mass: 0.003227, vz: 15.62, trailColor: 0xff4422, rotationHours: 24.62,  tiltDeg: 25.19},
+    {name: 'Jupiter', texturePath: 'textures/jupiter.jpg',     radius: 2.5,  distance: 74,  mass: 9.548,    vz: 11.62, trailColor: 0xffaa77, rotationHours: 9.93,   tiltDeg: 3.13},
+    {name: 'Saturn',  texturePath: 'textures/saturn.jpg',      radius: 2.1,  distance: 101, mass: 2.859,    vz: 9.95,  trailColor: 0xeeddcc, rotationHours: 10.66,  tiltDeg: 26.73},
+    {name: 'Uranus',  texturePath: 'textures/uranus.jpg',      radius: 1.5,  distance: 128, mass: 0.4366,   vz: 8.84,  trailColor: 0x88ccff, rotationHours: 17.24,  tiltDeg: 97.77},
+    {name: 'Neptune', texturePath: 'textures/neptune.jpg',     radius: 1.5,  distance: 155, mass: 0.5151,   vz: 8.03,  trailColor: 0x4444ff, rotationHours: 16.11,  tiltDeg: 28.32},
   ];
+
+  // Spin speed is 1/rotationHours scaled by a single constant, so the ratios
+  // between bodies are exactly the real ones. The constant only sets the
+  // absolute pace: Earth turns once per ~360 frames (~6 s at 60 fps), which
+  // leaves Jupiter visibly fast and Venus nearly frozen, as in reality.
+  // True proportionality to the orbital timescale is not usable here — one
+  // orbit of Earth takes ~27 s in this sim, which would put its day at 0.07 s.
+  const SPIN_SCALE = 0.416; // radians * hours, per frame
+  const TWO_PI = Math.PI * 2;
 
   // ===============================================
   // WASM ENGINE WORKER LIFECYCLE
@@ -239,8 +297,39 @@ async function main(){
   // Textures are cached across resets; only materials/geometries are rebuilt.
   const textureCache = new Map();
   function getTexture(path) {
-    if (!textureCache.has(path)) textureCache.set(path, textureLoader.load(path));
+    if (!textureCache.has(path)) {
+      const tex = textureLoader.load(path);
+      // Since three r152 a loaded texture defaults to NoColorSpace. Colour maps
+      // authored as sRGB JPEGs must say so explicitly, otherwise the renderer
+      // treats their values as linear and applies the output transform twice,
+      // which is what washed the planet surfaces out.
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      textureCache.set(path, tex);
+    }
     return textureCache.get(path);
+  }
+
+  // Radial-gradient billboard used as the Sun's corona. Generated once into a
+  // canvas rather than shipped as an asset, and cached for the lifetime of the
+  // page so that resets never dispose it.
+  let glowTexture = null;
+  function getGlowTexture() {
+    if (glowTexture) return glowTexture;
+    const size = 256;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0.00, 'rgba(255,244,214,1.0)');
+    g.addColorStop(0.18, 'rgba(255,206,122,0.55)');
+    g.addColorStop(0.45, 'rgba(255,150,60,0.16)');
+    g.addColorStop(1.00, 'rgba(255,120,40,0.0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    glowTexture = new THREE.CanvasTexture(cv);
+    glowTexture.colorSpace = THREE.SRGBColorSpace;
+    return glowTexture;
   }
   let planets = [];
   let asteroidMesh = null;
@@ -282,8 +371,12 @@ async function main(){
     planets.forEach(p => {
       scene.remove(p);
       p.material.dispose();
-      p.children.forEach(child => {          // Saturn's ring
-        child.geometry.dispose();
+      p.children.forEach(child => {          // Saturn's ring, the Sun's corona
+        // A Sprite draws from a geometry shared by every sprite in the module;
+        // disposing it would break any sprite created after the next reset.
+        // Only the per-instance material is owned here, and the corona's
+        // texture is cached, so it must not be disposed either.
+        if (!child.isSprite) child.geometry.dispose();
         child.material.dispose();
       });
       if (p.userData.trail) {
@@ -343,9 +436,32 @@ async function main(){
       planetMesh.scale.set(data.radius, data.radius, data.radius);
       planetMesh.position.x = data.distance;
 
+      // Default Euler order 'XYZ' composes as Rx * Ry, i.e. the Y spin is
+      // applied first and the X obliquity tips the already-spinning body —
+      // so rotation.y stays a rotation about the planet's own axis.
+      planetMesh.rotation.x = THREE.MathUtils.degToRad(data.tiltDeg);
+      planetMesh.userData.spinPerFrame = SPIN_SCALE / data.rotationHours;
+
+      if (data.name === 'Sun') {
+        // Additive corona billboard. One extra draw call per frame, no
+        // post-processing pass: the glow is a textured quad, not bloom.
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: getGlowTexture(),
+          color: 0xffffff,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        }));
+        // Sprite scale is in the parent's local units, and the Sun mesh is
+        // already scaled by its radius, so 4 gives a corona four solar radii
+        // across.
+        glow.scale.set(4.2, 4.2, 1);
+        planetMesh.add(glow);
+      }
+
      if(data.name == 'Saturn'){
-        const ringGeometry = new THREE.RingGeometry(1.2, 1.7, 64); 
-        
+        const ringGeometry = new THREE.RingGeometry(1.2, 1.7, 64);
+
         const ringMaterial = new THREE.MeshBasicMaterial({
           map: getTexture("textures/saturn_ring.png"),
           side: THREE.DoubleSide, 
@@ -355,7 +471,10 @@ async function main(){
 
         const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
         
-        ringMesh.rotation.x = Math.PI / 1.5; 
+        // The ring lies in Saturn's equatorial plane, so as a child of the
+        // planet it only needs the flat RingGeometry laid into the local XZ
+        // plane; Saturn's own 26.7 degree obliquity then tips it along.
+        ringMesh.rotation.x = Math.PI / 2;
         planetMesh.add(ringMesh);
       }
 
@@ -375,7 +494,12 @@ async function main(){
       currentBodyIndex++; 
 
       if (data.name !== 'Sun') {
-        const maxTrailPoints = 8000; //
+        // The trail window is a compromise between showing the orbit shape and
+        // not letting the lines dominate the image. At 3000 points sampled
+        // every other frame the window spans 6000 frames, i.e. a little over
+        // two Earth orbits, so the trail reads as a path rather than as a
+        // solid ring drawn over itself many times.
+        const maxTrailPoints = 3000;
         const trailGeometry = new THREE.BufferGeometry();
         const trailPositions = new Float32Array(maxTrailPoints * 3);
         trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
@@ -384,8 +508,8 @@ async function main(){
         const trailMaterial = new THREE.LineBasicMaterial({
           color: data.trailColor || 0xffffff,
           transparent: true,
-          opacity: 0.3,
-          linewidth: 0.5
+          opacity: 0.12,
+          depthWrite: false
         });
 
         const trailMesh = new THREE.Line(trailGeometry, trailMaterial);
@@ -407,15 +531,24 @@ async function main(){
 
     //Asteroids
     const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
-    const rockMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0xffffff,shininess: 1});
+    // Flat shading on the 12-face solid gives each rock visible facets that
+    // catch the Sun individually, which reads far better than the previous
+    // white high-specular sphere-like blobs. The base colour is white because
+    // per-instance colours multiply it.
+    const rockMaterial = new THREE.MeshPhongMaterial({
+      color: 0xffffff, specular: 0x2a2a2a, shininess: 4, flatShading: true
+    });
     asteroidMesh = new THREE.InstancedMesh(rockGeometry, rockMaterial, ASTEROID_COUNT);
     asteroidMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(asteroidMesh);
 
     asteroidRadii = new Float32Array(ASTEROID_COUNT);
+    const rockColor = new THREE.Color();
 
     for (let i = 0; i < ASTEROID_COUNT; i++) {
-      const distance = 32 + Math.random() * 20; 
+      // The belt sits between Mars (d = 41) and Jupiter (d = 74), as in the
+      // real Solar System.
+      const distance = 44 + Math.random() * 27;
       const angle = Math.random() * Math.PI * 2;
       const x = Math.cos(angle) * distance;
       const z = Math.sin(angle) * distance;
@@ -554,6 +687,11 @@ async function main(){
       planet.position.x = px;
       planet.position.y = py;
       planet.position.z = pz;
+
+      
+      let spinAngle = planet.rotation.y + planet.userData.spinPerFrame;
+      if (spinAngle > TWO_PI) spinAngle -= TWO_PI;
+      planet.rotation.y = spinAngle;
 
       if (planet.userData.trail) {
         const trail = planet.userData.trail;
