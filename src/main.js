@@ -181,18 +181,6 @@ async function main(){
   scene.add(makeStarLayer(7000, 1700, 1.1, 0.55, 0.05));  // faint background
   scene.add(makeStarLayer(700,  1700, 1.5, 0.45, 0.05));  // bright foreground
 
-  // `rotationHours` is the sidereal rotation period and `tiltDeg` the axial
-  // obliquity, both real values (NASA planetary fact sheets). Bodies always
-  // spin the same way about their own +Y axis; retrograde rotation falls out
-  // of an obliquity past 90 degrees, which is how Venus (177.4) and Uranus
-  // (97.8) are actually described — no separate direction flag needed.
-  // `mass` is the true Sun-to-planet mass ratio expressed in the simulation's
-  // normalized unit system (G = 1, M_sun = 10000), i.e. m = 10000 / (M_sun/M_p)
-  // with the ratios taken from the IAU/NASA planetary fact sheets. `vz` is the
-  // circular-orbit speed sqrt(G*M_sun/d) = 100/sqrt(d) for the listed radius,
-  // so every entry is dynamically consistent with its own distance.
-  // `distance` is the only quantity deliberately unfaithful to reality: the
-  // orbital radii are compressed for legibility (Section 2.5 of the thesis).
   const planetData = [
     {name: 'Sun',     texturePath: 'textures/sun-texture.jpg', radius: 3,    distance: 0,   mass: 10000,    vz: 0,     trailColor: 0xffcc33, rotationHours: 609.12, tiltDeg: 7.25},
     {name: 'Mercury', texturePath: 'textures/mercury.jpg',     radius: 0.2,  distance: 14,  mass: 0.00166,  vz: 26.73, trailColor: 0xaaaaaa, rotationHours: 1407.6, tiltDeg: 0.03},
@@ -206,12 +194,7 @@ async function main(){
     {name: 'Neptune', texturePath: 'textures/neptune.jpg',     radius: 1.5,  distance: 155, mass: 0.5151,   vz: 8.03,  trailColor: 0x4444ff, rotationHours: 16.11,  tiltDeg: 28.32},
   ];
 
-  // Spin speed is 1/rotationHours scaled by a single constant, so the ratios
-  // between bodies are exactly the real ones. The constant only sets the
-  // absolute pace: Earth turns once per ~360 frames (~6 s at 60 fps), which
-  // leaves Jupiter visibly fast and Venus nearly frozen, as in reality.
-  // True proportionality to the orbital timescale is not usable here — one
-  // orbit of Earth takes ~27 s in this sim, which would put its day at 0.07 s.
+
   const SPIN_SCALE = 0.416; // radians * hours, per frame
   const TWO_PI = Math.PI * 2;
 
@@ -310,9 +293,7 @@ async function main(){
     return textureCache.get(path);
   }
 
-  // Radial-gradient billboard used as the Sun's corona. Generated once into a
-  // canvas rather than shipped as an asset, and cached for the lifetime of the
-  // page so that resets never dispose it.
+
   let glowTexture = null;
   function getGlowTexture() {
     if (glowTexture) return glowTexture;
@@ -371,11 +352,7 @@ async function main(){
     planets.forEach(p => {
       scene.remove(p);
       p.material.dispose();
-      p.children.forEach(child => {          // Saturn's ring, the Sun's corona
-        // A Sprite draws from a geometry shared by every sprite in the module;
-        // disposing it would break any sprite created after the next reset.
-        // Only the per-instance material is owned here, and the corona's
-        // texture is cached, so it must not be disposed either.
+      p.children.forEach(child => {         
         if (!child.isSprite) child.geometry.dispose();
         child.material.dispose();
       });
@@ -556,7 +533,8 @@ async function main(){
       const vx = -Math.sin(angle) * velocity;
       const vz = Math.cos(angle) * velocity;
       const mass = 0.00001;
-      const radius = 0.05 + Math.random() * 0.05;
+ 
+      const radius = 0.10 + Math.random() * 0.14;
       asteroidRadii[i] = radius;
 
       const pmIdx = currentBodyIndex * 4;
@@ -577,8 +555,15 @@ async function main(){
       dummy.updateMatrix();
       asteroidMesh.setMatrixAt(i, dummy.matrix);
 
+
+      rockColor.setHSL(0.06 + Math.random() * 0.04,
+                       0.08 + Math.random() * 0.20,
+                       0.45 + Math.random() * 0.35);
+      asteroidMesh.setColorAt(i, rockColor);
+
       currentBodyIndex++;
     }
+    if (asteroidMesh.instanceColor) asteroidMesh.instanceColor.needsUpdate = true;
 
     // Pre-calculate Frame 0 Gravity
     if(useWasm){
