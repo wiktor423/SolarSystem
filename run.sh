@@ -4,7 +4,7 @@ set -euo pipefail
 emcc cpp/physics_engine.cpp -o cpp/physics_wasm.js \
   -pthread \
   -s USE_PTHREADS=1 \
-  -s PTHREAD_POOL_SIZE=16 \
+  -s 'PTHREAD_POOL_SIZE=navigator.hardwareConcurrency' \
   -s MODULARIZE=1 \
   -s EXPORT_ES6=1 \
   -s EXPORT_NAME='createModule' \
@@ -14,5 +14,5 @@ emcc cpp/physics_engine.cpp -o cpp/physics_wasm.js \
   -s ENVIRONMENT=web,worker \
   -O3 -msimd128 
 
-echo "Built cpp/physics_wasm.js with a 16-worker pthread pool"
+echo "Built cpp/physics_wasm.js with a pthread pool sized to navigator.hardwareConcurrency"
 python3 server.py 

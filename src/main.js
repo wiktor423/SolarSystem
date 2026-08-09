@@ -204,8 +204,8 @@ async function main(){
   // The worker is created lazily when the WASM engine is selected and
   // terminated when switching to the JS engine. Terminating it also tears
   // down the Emscripten pthread pool workers it spawned and releases the
-  // module's growable shared WASM heap — otherwise 17 orphaned workers and
-  // their memory stay alive alongside the JS engine's 16 workers.
+  // module's growable shared WASM heap — otherwise the orphaned pool workers
+  // and their memory stay alive alongside the JS engine's own worker pool.
 
   let wasmWorker = null;
   const wasmPending = new Map();

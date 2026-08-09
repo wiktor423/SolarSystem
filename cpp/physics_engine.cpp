@@ -9,7 +9,13 @@ std::vector<double> vel;     //vx, vy, vz
 std::vector<double> accel;   //ax, ay, az
 
 int bodyCount = 0;
-const int NUM_THREADS = 16;
+// Set in initEngine from the machine's logical core count. Under Emscripten,
+// std::thread::hardware_concurrency() reads navigator.hardwareConcurrency —
+// the same value PTHREAD_POOL_SIZE uses at link time (run.sh) and the JS
+// engine uses for its worker pool. Never raise this above the pool size:
+// spawning a pthread with an exhausted pool cannot complete while this
+// thread blocks in join(), which would deadlock the whole engine.
+int NUM_THREADS = 4;
 
 void computeAccelBlock(int start, int end) {
     for (int i = start; i < end; i++) {
@@ -63,6 +69,9 @@ void runThreads() {
 extern "C" {
     EMSCRIPTEN_KEEPALIVE
     void initEngine(int maxBodies) {
+        unsigned hc = std::thread::hardware_concurrency();
+        if (hc > 0) NUM_THREADS = (int)hc;
+
         bodyCount = std::max(maxBodies, 0);
 
         posMass.resize(bodyCount * 4, 0.0);

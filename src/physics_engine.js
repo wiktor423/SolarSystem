@@ -11,7 +11,11 @@ export class PhysicsEngineJS {
         this.vel     = new Float64Array(this.velBuffer);
         this.accel   = new Float64Array(this.accelBuffer);
 
-        this.numWorkers = 16;
+        // One worker per logical core. hardwareConcurrency is undefined on
+        // some older browsers, hence the fallback. The WASM engine sizes its
+        // pthread pool from the same value (see run.sh / physics_engine.cpp),
+        // which keeps the two backends comparable on any machine.
+        this.numWorkers = Math.max(1, navigator.hardwareConcurrency || 4);
         this.workers = [];
         this._computeResolve = null;
         this._computeCompleted = 0;
