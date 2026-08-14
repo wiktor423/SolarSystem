@@ -11,7 +11,8 @@ export class PhysicsEngineJS {
         this.vel     = new Float64Array(this.velBuffer);
         this.accel   = new Float64Array(this.accelBuffer);
 
-        this.numWorkers = 16;
+        // One worker per logical core.  
+        this.numWorkers = Math.max(1, navigator.hardwareConcurrency || 4);
         this.workers = [];
         this._computeResolve = null;
         this._computeCompleted = 0;
