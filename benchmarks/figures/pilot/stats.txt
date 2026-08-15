@@ -1,0 +1,115 @@
+----- 4500 ------
+WASM Statistics:
+Mean: 10.91 ms
+Median: 10.78 ms
+Std: 0.99 ms
+Min: 8.46 ms
+Max: 16.92 ms
+95th percentile: 12.61 ms
+Frames above 16.67 ms: 1
+
+
+JS Statistics:
+Mean: 11.92 ms
+Median: 11.46 ms
+Std: 2.21 ms
+Min: 9.91 ms
+Max: 44.42 ms
+95th percentile: 14.30 ms
+Frames above 16.67 ms: 9
+
+Mean speedup (T_JS / T_WASM): 1.09x
+
+
+----- 5000 ------
+WASM Statistics:
+Mean: 11.64 ms
+Median: 11.57 ms
+Std: 1.14 ms
+Min: 10.16 ms
+Max: 15.43 ms
+95th percentile: 13.71 ms
+Frames above 16.67 ms: 0
+
+
+JS Statistics:
+Mean: 13.83 ms
+Median: 13.67 ms
+Std: 2.55 ms
+Min: 12.03 ms
+Max: 58.10 ms
+95th percentile: 15.70 ms
+Frames above 16.67 ms: 24
+
+Mean speedup (T_JS / T_WASM): 1.19x
+
+
+----- 5500 ------
+WASM Statistics:
+Mean: 13.43 ms
+Median: 13.34 ms
+Std: 0.81 ms
+Min: 12.29 ms
+Max: 16.48 ms
+95th percentile: 14.74 ms
+Frames above 16.67 ms: 0
+
+
+JS Statistics:
+Mean: 16.87 ms
+Median: 16.53 ms
+Std: 3.23 ms
+Min: 14.55 ms
+Max: 69.00 ms
+95th percentile: 20.15 ms
+Frames above 16.67 ms: 428
+
+Mean speedup (T_JS / T_WASM): 1.26x
+
+
+----- 6000 ------
+WASM Statistics:
+Mean: 15.92 ms
+Median: 15.67 ms
+Std: 0.98 ms
+Min: 14.66 ms
+Max: 21.52 ms
+95th percentile: 17.91 ms
+Frames above 16.67 ms: 154
+
+
+JS Statistics:
+Mean: 19.86 ms
+Median: 19.62 ms
+Std: 2.93 ms
+Min: 17.36 ms
+Max: 65.88 ms
+95th percentile: 22.57 ms
+Frames above 16.67 ms: 1000
+
+Mean speedup (T_JS / T_WASM): 1.25x
+
+
+----- 6500 ------
+WASM Statistics:
+Mean: 18.61 ms
+Median: 18.29 ms
+Std: 1.21 ms
+Min: 17.14 ms
+Max: 25.99 ms
+95th percentile: 21.09 ms
+Frames above 16.67 ms: 1000
+
+
+JS Statistics:
+Mean: 23.00 ms
+Median: 22.73 ms
+Std: 4.23 ms
+Min: 20.22 ms
+Max: 96.08 ms
+95th percentile: 26.23 ms
+Frames above 16.67 ms: 1000
+
+Mean speedup (T_JS / T_WASM): 1.24x
+
+

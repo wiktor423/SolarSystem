@@ -1,20 +1,20 @@
 # Node dependencies
 node_modules/
 
-# Emscripten outputs
-public/*.js
-public/*.wasm
-
-cpp/*.js
-cpp/*.wasm
-
 # Vite build folder
 dist/
 
-*.txt
-benchmarks/
-references/
-main.md 
-CLAUDE.md 
+# Python
+__pycache__/
+benchmarks/venv/
 
+# Local-only notes and documents
+compilation.txt
+references/
+main.md
 docs/
+docs.zip
+*.dotm
+
+# Editor
+.vscode/
