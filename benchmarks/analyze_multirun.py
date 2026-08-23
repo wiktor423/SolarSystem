@@ -14,7 +14,7 @@ OUT_DIR = os.path.join(HERE, "figures", "multirun")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 BUDGET = 16.67            # 60 FPS frame budget, ms
-STEADY = slice(520, 990)  # post-stabilization window (event sits at 503-505)
+STEADY = slice(520, 990)  # post-stabilization window 
 
 COL_JS = "#e74c3c"
 COL_WASM = "#2980b9"
@@ -151,13 +151,85 @@ def spike_report():
     print(f"peak inside frames 503-505 in {aligned}/{total} runs")
 
 
-def wasm_settle_report():
-    print("\n=== Chrome WASM early-phase elevation: mean(0-300) vs mean(600-990) ===")
-    for n in counts("Chrome"):
-        for p in runs("Chrome", "WASM", n):
+def settle_report(browser, engine, min_count=0):
+    print(f"\n=== {browser} {engine} early-phase elevation: "
+          f"mean(0-300) vs mean(600-990) ===")
+    for n in counts(browser):
+        if n < min_count:
+            continue
+        for p in runs(browser, engine, n):
             a, b = p.iloc[0:300].mean(), p.iloc[600:990].mean()
-            if n >= 4500:
-                print(f"Na={n:>6}: early={a:6.2f}  late={b:6.2f}  diff={a-b:+5.2f} ({100*(a-b)/b:+5.1f}%)")
+            print(f"Na={n:>6}: early={a:6.2f}  late={b:6.2f}  "
+                  f"diff={a-b:+5.2f} ({100*(a-b)/b:+5.1f}%)")
+
+
+def spread_report():
+    """Run-to-run reproducibility: SD across runs as a percentage of the mean."""
+    print("\n=== run-to-run spread: across-run SD as % of the mean ===")
+    worst_w = worst_s = (0.0, None)
+    for browser in ("Chrome", "Firefox"):
+        for n in counts(browser):
+            for eng in ("JS", "WASM"):
+                if not runs(browser, eng, n):
+                    continue
+                s = config_stats(browser, eng, n)
+                if s["runs"] < 2:
+                    continue
+                w = 100 * s["mean_sd"] / s["mean"]
+                ss = 100 * s["ss_sd"] / s["ss_mean"]
+                worst_w = max(worst_w, (w, f"{browser} {eng} {n}"))
+                worst_s = max(worst_s, (ss, f"{browser} {eng} {n}"))
+                print(f"{browser:>8} {n:>6} {eng:>5}: whole={w:5.2f}%  steady={ss:5.2f}%")
+    print(f"worst whole-run spread:   {worst_w[0]:.2f}%  ({worst_w[1]})")
+    print(f"worst steady-state spread: {worst_s[0]:.2f}%  ({worst_s[1]})")
+
+
+def jitter_report():
+    """Distribution width, whole run and post-stabilization, JS vs WASM.
+    """
+    print("\n=== pooled SD (ms): whole run vs post-stabilization ===")
+    hdr = (f'{"browser":>8} {"Na":>6} {"SD_js":>6} {"SD_wasm":>8} {"ratio":>6}   '
+           f'{"ssSD_js":>8} {"ssSD_wasm":>10} {"ratio":>6}')
+    print(hdr)
+    for browser in ("Chrome", "Firefox"):
+        for n in counts(browser):
+            j, w = runs(browser, "JS", n), runs(browser, "WASM", n)
+            if not j or not w:
+                continue
+            pj, pw = pd.concat(j).std(), pd.concat(w).std()
+            qj = pd.concat([p.iloc[520:] for p in j]).std()
+            qw = pd.concat([p.iloc[520:] for p in w]).std()
+            print(f"{browser:>8} {n:>6} {pj:>6.2f} {pw:>8.2f} {pj/pw:>6.2f}   "
+                  f"{qj:>8.2f} {qw:>10.2f} {qj/qw:>6.2f}")
+
+
+def plateau_report():
+    """The Chrome JavaScript warm-up plateau, and the gain at the event.
+
+    Compares the pre-event plateau (frames 100-490) with the converged
+    steady state, and the immediate pre/post-event levels. 
+    """
+    print("\n=== Chrome JS warm-up plateau (frames 100-490) vs steady state ===")
+    print(f'{"Na":>6} {"plateau":>8} {"steady":>7} {"elev%":>7} '
+          f'{"pre(460-500)":>13} {"post(510-560)":>14} {"gain_ms":>8}')
+    for n in counts("Chrome"):
+        for p in runs("Chrome", "JS", n):
+            pl, ss = p.iloc[100:490].mean(), p.iloc[STEADY].mean()
+            pre, post = p.iloc[460:500].mean(), p.iloc[510:560].mean()
+            print(f"{n:>6} {pl:>8.2f} {ss:>7.2f} {100*(pl-ss)/ss:>+6.1f}% "
+                  f"{pre:>13.2f} {post:>14.2f} {pre-post:>+8.2f}")
+
+
+def late_spike_report():
+    """Secondary bursts late in the Chrome JavaScript runs """
+    print("\n=== Chrome JS secondary bursts after frame 600 ===")
+    for n in counts("Chrome"):
+        for i, p in enumerate(runs("Chrome", "JS", n)):
+            med = p.median()
+            hits = [(int(f), v / med) for f, v in p.iloc[600:].items() if v > 2 * med]
+            if hits:
+                print(f"Na={n:>6} run{i+1}: "
+                      + ", ".join(f"fr{f}:{r:.1f}x" for f, r in hits))
 
 
 # figures
@@ -310,8 +382,14 @@ if __name__ == "__main__":
         summary_table(browser)
         speedups(browser)
         model_report(browser)
+    spread_report()
+    jitter_report()
     spike_report()
-    wasm_settle_report()
+    plateau_report()
+    late_spike_report()
+    settle_report("Chrome", "WASM", min_count=4500)
+    settle_report("Firefox", "WASM")
+    settle_report("Firefox", "JS")
 
     fig_scaling_chrome()
     fig_multirun("Chrome", 5500, "bench_multirun_chrome_5500.png")
